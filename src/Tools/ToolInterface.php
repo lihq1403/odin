@@ -10,14 +10,11 @@ declare(strict_types=1);
  * @license  https://github.com/hyperf/hyperf/blob/master/LICENSE
  */
 
-namespace Hyperf\Odin\Memory;
+namespace Hyperf\Odin\Tools;
 
-abstract class AbstractMemory implements MemoryInterface
+use Hyperf\Odin\Apis\OpenAI\Request\ToolDefinition;
+
+interface ToolInterface
 {
-    protected array $conversations = [];
-
-    public function count(): int
-    {
-        return count($this->conversations);
-    }
+    public function toToolDefinition(): ToolDefinition;
 }

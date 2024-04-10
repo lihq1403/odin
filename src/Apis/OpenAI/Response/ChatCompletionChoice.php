@@ -50,8 +50,32 @@ class ChatCompletionChoice
         return $this->finishReason;
     }
 
-    public function isFinishedByFunctionCall(): bool
+    public function isFinishedByToolCall(): bool
     {
-        return $this->getFinishReason() === 'function_call';
+        return $this->getFinishReason() === 'tool_calls';
+    }
+
+    public function setMessage(MessageInterface $message): static
+    {
+        $this->message = $message;
+        return $this;
+    }
+
+    public function setIndex(?int $index): static
+    {
+        $this->index = $index;
+        return $this;
+    }
+
+    public function setLogprobs(?string $logprobs): static
+    {
+        $this->logprobs = $logprobs;
+        return $this;
+    }
+
+    public function setFinishReason(?string $finishReason): static
+    {
+        $this->finishReason = $finishReason;
+        return $this;
     }
 }

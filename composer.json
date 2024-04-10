@@ -24,6 +24,7 @@
         "hyperf/di": "~2.2.0 || 3.0.*",
         "hyperf/config": "~2.2.0 || 3.0.*",
         "hyperf/qdrant-client": "*",
+        "hyperf/support": "~2.2.0 || 3.0.*",
         "yethee/tiktoken": "^0.1.2"
     },
     "require-dev": {

@@ -14,12 +14,13 @@ namespace Hyperf\Odin\Apis\AzureOpenAI;
 
 use GuzzleHttp\Client as GuzzleClient;
 use Hyperf\Odin\Apis\ClientInterface;
-use Hyperf\Odin\Apis\OpenAI\Request\FunctionCallDefinition;
+use Hyperf\Odin\Apis\OpenAI\Request\ToolDefinition;
 use Hyperf\Odin\Apis\OpenAI\Response\ChatCompletionResponse;
 use Hyperf\Odin\Apis\OpenAI\Response\ListResponse;
 use Hyperf\Odin\Apis\OpenAI\Response\TextCompletionResponse;
 use Hyperf\Odin\Exception\NotImplementedException;
 use Hyperf\Odin\Message\MessageInterface;
+use Hyperf\Odin\Tools\ToolInterface;
 use InvalidArgumentException;
 use Psr\Log\LoggerInterface;
 
@@ -34,11 +35,13 @@ class Client implements ClientInterface
 
     protected ?LoggerInterface $logger;
 
-    protected bool $debug = false;
+    protected bool $debug = true;
+    protected string $model;
 
-    public function __construct(AzureOpenAIConfig $config, LoggerInterface $logger = null)
+    public function __construct(AzureOpenAIConfig $config, LoggerInterface $logger, string $model)
     {
         $this->logger = $logger;
+        $this->model = $model;
         $this->initConfig($config);
     }
 
@@ -48,7 +51,8 @@ class Client implements ClientInterface
         float $temperature = 0.9,
         int $maxTokens = 1000,
         array $stop = [],
-        array $functions = [],
+        array $tools = [],
+        bool $stream = false,
     ): ChatCompletionResponse {
         $deploymentPath = $this->buildDeploymentPath($model);
         $messagesArr = [];
@@ -65,34 +69,33 @@ class Client implements ClientInterface
         if ($maxTokens) {
             $json['max_tokens'] = $maxTokens;
         }
-        if ($functions) {
-            $functionsArray = [];
-            foreach ($functions as $function) {
-                if ($function instanceof FunctionCallDefinition) {
-                    $functionsArray[] = $function->toArray();
+        if (! empty($tools)) {
+            $toolsArray = [];
+            foreach ($tools as $tool) {
+                if ($tool instanceof ToolInterface) {
+                    $toolsArray[] = $tool->toToolDefinition()->toArray();
+                } elseif ($tool instanceof ToolDefinition) {
+                    $toolsArray[] = $tool->toArray();
                 } else {
-                    $functionsArray[] = $function;
+                    $toolsArray[] = $tool;
                 }
             }
-
-            $json['functions'] = $functionsArray;
-            $json['function_call'] = 'auto';
+            if (! empty($toolsArray)) {
+                $json['tools'] = $toolsArray;
+                $json['tool_choice'] = 'auto';
+            }
         }
         if ($stop) {
             $json['stop'] = $stop;
         }
-        $this->debug && $this->logger?->debug(sprintf("Send: \nSystem Message: %s\nUser Message: %s", $messages['system'] ?? '', $messages['user'] ?? ''));
-        try {
-            $response = $this->getClient($model)->post($deploymentPath . '/chat/completions', [
-                'query' => [
-                    'api-version' => $this->config->getApiVersion($model),
-                ],
-                'json' => $json,
-            ]);
-        } catch (\Exception $exception) {
-            var_dump($json);
-            throw $exception;
-        }
+        $this->debug && $this->logger?->debug(sprintf("Send Messages: %s\nTools: %s", json_encode($messagesArr, JSON_UNESCAPED_UNICODE), json_encode($tools, JSON_UNESCAPED_UNICODE)));
+        $response = $this->getClient($model)->post($deploymentPath . '/chat/completions', [
+            'query' => [
+                'api-version' => $this->config->getApiVersion($model),
+            ],
+            'json' => $json,
+            'verify' => false,
+        ]);
         $chatCompletionResponse = new ChatCompletionResponse($response);
         $this->debug && $this->logger?->debug('Receive: ' . $chatCompletionResponse);
         return $chatCompletionResponse;
@@ -160,17 +163,15 @@ class Client implements ClientInterface
             throw new InvalidArgumentException('AzureOpenAIConfig is required');
         }
         $this->config = $config;
-        foreach ($config->getMapper() as $model => $modelConfig) {
-            $headers = [
-                'api-key' => $config->getApiKey($model),
-                'Content-Type' => 'application/json',
-                'User-Agent' => 'Hyperf-Odin/1.0',
-            ];
-            $this->clients[$model] = new GuzzleClient([
-                'base_uri' => $config->getBaseUrl($model),
-                'headers' => $headers,
-            ]);
-        }
+        $headers = [
+            'api-key' => $config->getApiKey(),
+            'Content-Type' => 'application/json',
+            'User-Agent' => 'Hyperf-Odin/1.0',
+        ];
+        $this->clients[$this->model] = new GuzzleClient([
+            'base_uri' => $config->getBaseUrl(),
+            'headers' => $headers,
+        ]);
         return $this;
     }
 
