@@ -15,7 +15,10 @@
     "autoload-dev": {
         "psr-4": {
             "HyperfTest\\Odin\\": "tests"
-        }
+        },
+        "files": [
+            "src/Functions.php"
+        ]
     },
     "require": {
         "php": ">=8.0",
