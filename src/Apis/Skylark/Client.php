@@ -13,7 +13,7 @@ declare(strict_types=1);
 namespace Hyperf\Odin\Apis\Skylark;
 
 use GuzzleHttp\Client as GuzzleClient;
-use Hyperf\Codec\Json;
+use Hyperf\Utils\Codec\Json;
 use Hyperf\Odin\Apis\ClientInterface;
 use Hyperf\Odin\Apis\OpenAI\Request\ToolDefinition;
 use Hyperf\Odin\Apis\OpenAI\Response\ChatCompletionResponse;

@@ -4,7 +4,7 @@ namespace Hyperf\Odin\Agent;
 
 
 use Hyperf\Codec\Exception\InvalidArgumentException;
-use Hyperf\Codec\Json;
+use Hyperf\Utils\Codec\Json;
 use Hyperf\Odin\Action\ActionFactory;
 use Hyperf\Odin\Apis\ClientInterface;
 use Hyperf\Odin\Apis\OpenAI\Response\ChatCompletionResponse;
