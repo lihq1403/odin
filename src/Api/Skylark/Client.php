@@ -105,7 +105,7 @@ class Client implements ClientInterface
         $this->validConfig($config);
         $this->client = new GuzzleClient([
             'base_uri' => $config->getHost(),
-            'timeout' => 120.0,
+            'timeout' => 300.0,
         ]);
         $this->config = $config;
         return $this;
