@@ -118,6 +118,7 @@ class Client implements ClientInterface
                 'temperature' => $temperature,
                 'max_tokens' => $maxTokens,
             ],
+            'verify' => false,
         ]);
         return new TextCompletionResponse($response);
     }
@@ -142,6 +143,7 @@ class Client implements ClientInterface
                 'api-version' => $this->config->getApiVersion($model),
             ],
             'json' => $json,
+            'verify' => false,
         ]);
         return new ListResponse($response);
     }

@@ -10,30 +10,38 @@ declare(strict_types=1);
  * @license  https://github.com/hyperf/hyperf/blob/master/LICENSE
  */
 
-namespace Hyperf\Odin\Api\OpenAI;
+namespace Hyperf\Odin\Api\Chatglm;
 
 use GuzzleHttp\Client as GuzzleClient;
 use Hyperf\Odin\Api\ClientInterface;
+use Hyperf\Odin\Api\OpenAI\Request\ToolDefinition;
 use Hyperf\Odin\Api\OpenAI\Response\ChatCompletionResponse;
 use Hyperf\Odin\Api\OpenAI\Response\ListResponse;
-use Hyperf\Odin\Api\OpenAI\Response\TextCompletionResponse;
+use Hyperf\Odin\Exception\NotImplementedException;
 use Hyperf\Odin\Message\MessageInterface;
+use Hyperf\Odin\Tool\ToolInterface;
 use InvalidArgumentException;
 use Psr\Log\LoggerInterface;
 
 class Client implements ClientInterface
 {
-    protected GuzzleClient $client;
+    protected ChatglmConfig $config;
 
-    protected OpenAIConfig $config;
+    /**
+     * @var GuzzleClient[]
+     */
+    protected array $clients = [];
 
     protected ?LoggerInterface $logger;
 
-    protected bool $debug = false;
+    protected bool $debug = true;
 
-    public function __construct(OpenAIConfig $config, LoggerInterface $logger = null)
+    protected string $model;
+
+    public function __construct(ChatglmConfig $config, LoggerInterface $logger, string $model)
     {
         $this->logger = $logger;
+        $this->model = $model;
         $this->initConfig($config);
     }
 
@@ -45,6 +53,7 @@ class Client implements ClientInterface
         array $stop = [],
         array $tools = [],
         bool $stream = false,
+        array $meta = [],
     ): ChatCompletionResponse {
         $messagesArr = [];
         foreach ($messages as $message) {
@@ -56,55 +65,60 @@ class Client implements ClientInterface
             'messages' => $messagesArr,
             'model' => $model,
             'temperature' => $temperature,
-            'max_tokens' => $maxTokens,
         ];
+        if ($meta) {
+            $json['meta'] = $meta;
+        }
+        if ($maxTokens) {
+            $json['max_tokens'] = $maxTokens;
+        }
+        if (! empty($tools)) {
+            $toolsArray = [];
+            foreach ($tools as $tool) {
+                if ($tool instanceof ToolInterface) {
+                    $toolsArray[] = $tool->toToolDefinition()->toArray();
+                } elseif ($tool instanceof ToolDefinition) {
+                    $toolsArray[] = $tool->toArray();
+                } else {
+                    $toolsArray[] = $tool;
+                }
+            }
+            if (! empty($toolsArray)) {
+                $json['tools'] = $toolsArray;
+                $json['tool_choice'] = 'auto';
+            }
+        }
         if ($stop) {
             $json['stop'] = $stop;
         }
-        $this->debug && $this->logger?->debug(sprintf("Send: \nSystem Message: %s\nUser Message: %s", $messages['system'] ?? '', $messages['user'] ?? ''));
-        $response = $this->client->post('/v1/chat/completions', [
+        $this->debug && $this->logger?->debug(sprintf("Send Messages: %s\nTools: %s", json_encode($messagesArr, JSON_UNESCAPED_UNICODE), json_encode($tools, JSON_UNESCAPED_UNICODE)));
+        $response = $this->getClient($model)->post('/api/paas/v4/chat/completions', [
             'json' => $json,
+            'verify' => false,
         ]);
         $chatCompletionResponse = new ChatCompletionResponse($response);
         $this->debug && $this->logger?->debug('Receive: ' . $chatCompletionResponse);
         return $chatCompletionResponse;
     }
 
-    public function completions(
-        string $prompt,
-        string $model,
-        float $temperature = 0.9,
-        int $maxTokens = 200
-    ): TextCompletionResponse {
-        $response = $this->client->post('/v1/completions', [
-            'json' => [
-                'prompt' => $prompt,
-                'model' => $model,
-                'temperature' => $temperature,
-                'max_tokens' => $maxTokens,
-            ],
-        ]);
-        return new TextCompletionResponse($response);
-    }
-
     public function models(): ListResponse
     {
-        $response = $this->client->get('/v1/models');
-        return new ListResponse($response);
+        throw new NotImplementedException();
     }
 
     public function embedding(
         string $input,
-        string $model = 'text-embedding-ada-002',
+        string $model = 'embedding-2',
         ?string $user = null
     ): ListResponse {
         $json = [
-            'input' => $input,
             'model' => $model,
+            'input' => $input,
         ];
         $user && $json['user'] = $user;
-        $response = $this->client->post('/v1/embeddings', [
+        $response = $this->getClient($model)->post('/api/paas/v4/embeddings', [
             'json' => $json,
+            'verify' => false,
         ]);
         return new ListResponse($response);
     }
@@ -120,25 +134,27 @@ class Client implements ClientInterface
         return $this;
     }
 
-    protected function initConfig(OpenAIConfig $config): static
+    protected function initConfig(ChatglmConfig $config): static
     {
-        if (! $config->getApiKey()) {
-            throw new InvalidArgumentException('API key of OpenAI api is required');
+        if (! $config instanceof ChatglmConfig) {
+            throw new InvalidArgumentException('ChatglmConfig is required');
         }
+        $this->config = $config;
         $headers = [
             'Authorization' => 'Bearer ' . $config->getApiKey(),
             'Content-Type' => 'application/json',
             'User-Agent' => 'Hyperf-Odin/1.0',
         ];
-        if ($config->getOrganization()) {
-            $headers['OpenAI-Organization'] = $config->getOrganization();
-        }
-        $this->client = new GuzzleClient([
-            'base_uri' => $config->getBaseUrl(),
+        $this->clients[$this->model] = new GuzzleClient([
+            'base_uri' => $config->getHost(),
             'headers' => $headers,
-            'verify' => false,
         ]);
-        $this->config = $config;
         return $this;
     }
+
+    protected function getClient(string $model): ?GuzzleClient
+    {
+        return $this->clients[$model];
+    }
+
 }
