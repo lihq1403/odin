@@ -20,6 +20,7 @@ use Hyperf\Odin\Message\SystemMessage;
 use Hyperf\Odin\Message\ToolMessage;
 use Hyperf\Odin\Message\UserMessage;
 use Hyperf\Odin\Tool\Definition\ToolDefinition;
+use stdClass;
 
 class ConverseConverter implements ConverterInterface
 {
@@ -42,11 +43,29 @@ class ConverseConverter implements ConverterInterface
 
     public function convertToolMessage(ToolMessage $message): array
     {
-        $result = json_decode($message->getContent(), true);
+        $content = $message->getContent();
+        $result = json_decode($content, true);
+
         if (! $result) {
             $result = [
-                'result' => $message->getContent(),
+                'result' => $content,
             ];
+        } else {
+            // Check if the original JSON was an empty array [] vs empty object {}
+            if (trim($content) === '[]') {
+                // Original was empty array [], wrap it in result
+                $result = [
+                    'result' => $result,
+                ];
+            } elseif (is_array($result) && array_is_list($result)) {
+                // It's an indexed array (not associative), wrap it in result
+                $result = [
+                    'list' => $result,
+                ];
+            } elseif ($result === []) {
+                // It was empty object {}, convert to empty object
+                $result = new stdClass();
+            }
         }
         $contentBlocks = [
             [
