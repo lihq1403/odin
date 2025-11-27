@@ -24,17 +24,13 @@ class GeminiModel extends AbstractModel
 
     public function chatWithRequest(ChatCompletionRequest $request): ChatCompletionResponse
     {
-        $request->setThinking([
-            'thinking_budget' => -1,
-        ]);
+        $this->formatThinking($request);
         return parent::chatWithRequest($request);
     }
 
     public function chatStreamWithRequest(ChatCompletionRequest $request): ChatCompletionStreamResponse
     {
-        $request->setThinking([
-            'thinking_budget' => -1,
-        ]);
+        $this->formatThinking($request);
         return parent::chatStreamWithRequest($request);
     }
 
@@ -63,5 +59,17 @@ class GeminiModel extends AbstractModel
     protected function getApiVersionPath(): string
     {
         return '';
+    }
+
+    private function formatThinking(ChatCompletionRequest $request): void
+    {
+        $thinking = $request->getThinking();
+        if (! isset($thinking['thinking_budget'])) {
+            $thinking['thinking_budget'] = -1;
+        }
+        if (! isset($thinking['level'])) {
+            $thinking['level'] = 'HIGH';
+        }
+        $request->setThinking($thinking);
     }
 }

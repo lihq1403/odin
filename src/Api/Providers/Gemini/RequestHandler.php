@@ -435,8 +435,13 @@ class RequestHandler
             if (str_starts_with($model, 'gemini-2')) {
                 $config['thinkingBudget'] = $thinking['thinking_budget'];
             } else {
+                $level = $thinking['level'] ?? 'HIGH';
+                $level = strtoupper($level);
+                if (! in_array($level, ['HIGH', 'LOW'])) {
+                    $level = 'HIGH';
+                }
                 $config['includeThoughts'] = true;
-                $config['thinkingLevel'] = 'HIGH';
+                $config['thinkingLevel'] = $level;
             }
         }
 
