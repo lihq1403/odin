@@ -28,15 +28,16 @@ class ResponseHandler
      * @param array $geminiResponse Gemini native response
      * @param string $model Model name
      * @param int $cacheWriteTokens Tokens written to cache (0 if no cache created)
+     * @param string $contextHash Context hash for thought signature caching
      */
-    public static function convertResponse(array $geminiResponse, string $model, int $cacheWriteTokens = 0): ResponseInterface
+    public static function convertResponse(array $geminiResponse, string $model, int $cacheWriteTokens = 0, string $contextHash = ''): ResponseInterface
     {
         $openAIResponse = [
             'id' => self::generateId(),
             'object' => 'chat.completion',
             'created' => time(),
             'model' => $model,
-            'choices' => self::convertCandidates($geminiResponse['candidates'] ?? []),
+            'choices' => self::convertCandidates($geminiResponse['candidates'] ?? [], $contextHash),
             'usage' => self::convertUsage($geminiResponse['usageMetadata'] ?? [], $cacheWriteTokens),
         ];
 
@@ -51,14 +52,17 @@ class ResponseHandler
 
     /**
      * Convert Gemini candidates to OpenAI choices format.
+     *
+     * @param array $candidates Gemini candidates
+     * @param string $contextHash Context hash for thought signature caching
      */
-    private static function convertCandidates(array $candidates): array
+    private static function convertCandidates(array $candidates, string $contextHash = ''): array
     {
         $choices = [];
 
         foreach ($candidates as $index => $candidate) {
             $content = $candidate['content'] ?? [];
-            $message = self::convertContent($content);
+            $message = self::convertContent($content, $contextHash);
 
             // Determine finish reason
             // If there are tool calls, finish_reason should be 'tool_calls'
@@ -102,8 +106,11 @@ class ResponseHandler
 
     /**
      * Convert Gemini content to OpenAI message format.
+     *
+     * @param array $content Gemini content
+     * @param string $contextHash Context hash for thought signature caching
      */
-    private static function convertContent(array $content): array
+    private static function convertContent(array $content, string $contextHash = ''): array
     {
         $message = [
             'role' => 'assistant', // Gemini uses 'model', convert to 'assistant'
@@ -113,6 +120,7 @@ class ResponseHandler
         $textParts = [];
         $thoughtParts = [];
         $toolCalls = [];
+        $thoughtSignature = null;
 
         foreach ($parts as $part) {
             // Check if this is a thought part
@@ -127,6 +135,11 @@ class ResponseHandler
                     // This is normal response content
                     $textParts[] = $part['text'];
                 }
+            }
+
+            // Capture thoughtSignature from any part (can be on text part or standalone)
+            if (isset($part['thoughtSignature'])) {
+                $thoughtSignature = $part['thoughtSignature'];
             }
 
             // Handle function calls (tool calls)
@@ -147,9 +160,10 @@ class ResponseHandler
                 ];
 
                 // Preserve thought signature if present (Gemini-specific)
+                // thoughtSignature is at part level, not inside functionCall
                 // This is required for Gemini 3 Pro multi-turn function calling
-                if (isset($functionCall['thoughtSignature'])) {
-                    $toolCall['thought_signature'] = $functionCall['thoughtSignature'];
+                if (isset($part['thoughtSignature'])) {
+                    $toolCall['thought_signature'] = $part['thoughtSignature'];
                 }
 
                 $toolCalls[] = $toolCall;
@@ -167,6 +181,14 @@ class ResponseHandler
         // Add tool calls if present
         if (! empty($toolCalls)) {
             $message['tool_calls'] = $toolCalls;
+        }
+
+        // Store thought signature for normal messages (without tool calls)
+        // For tool calls, the signature is stored per tool call
+        if ($thoughtSignature !== null && empty($toolCalls) && $contextHash !== '') {
+            // Use context hash + content hash as cache key for uniqueness
+            $cacheKey = ThoughtSignatureCache::generateMessageKey($contextHash, $message['content']);
+            ThoughtSignatureCache::store($cacheKey, $thoughtSignature);
         }
 
         return $message;

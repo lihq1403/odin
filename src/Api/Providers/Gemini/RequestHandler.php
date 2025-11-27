@@ -166,7 +166,7 @@ class RequestHandler
         // but Gemini functionResponse requires the function name
         $toolCallIdToName = [];
 
-        foreach ($messages as $message) {
+        foreach ($messages as $index => $message) {
             if (! $message instanceof MessageInterface) {
                 continue;
             }
@@ -187,9 +187,12 @@ class RequestHandler
                 }
             }
 
+            // Calculate context hash for this message (hash of all previous messages)
+            $contextHash = ThoughtSignatureCache::calculateContextHash($messages, $index);
+
             $content = match (true) {
                 $message instanceof UserMessage => self::convertUserMessage($message),
-                $message instanceof AssistantMessage => self::convertAssistantMessage($message),
+                $message instanceof AssistantMessage => self::convertAssistantMessage($message, $contextHash),
                 $message instanceof ToolMessage => self::convertToolMessage($message, $toolCallIdToName),
                 default => null,
             };
@@ -218,14 +221,29 @@ class RequestHandler
 
     /**
      * Convert AssistantMessage to Gemini format.
+     *
+     * @param AssistantMessage $message The assistant message to convert
+     * @param string $contextHash Context hash (cumulative hash of all previous messages)
      */
-    private static function convertAssistantMessage(AssistantMessage $message): array
+    private static function convertAssistantMessage(AssistantMessage $message, string $contextHash = ''): array
     {
         $parts = [];
+        $content = $message->getContent();
 
         // Add text content if present
-        if ($message->getContent()) {
-            $parts[] = ['text' => $message->getContent()];
+        if ($content) {
+            $textPart = ['text' => $content];
+
+            // For normal messages (without tool calls), try to get thoughtSignature from cache
+            if (! $message->hasToolCalls() && $contextHash !== '') {
+                $cacheKey = ThoughtSignatureCache::generateMessageKey($contextHash, $content);
+                $thoughtSignature = ThoughtSignatureCache::get($cacheKey);
+                if ($thoughtSignature) {
+                    $textPart['thoughtSignature'] = $thoughtSignature;
+                }
+            }
+
+            $parts[] = $textPart;
         }
 
         // Add tool calls as functionCall parts

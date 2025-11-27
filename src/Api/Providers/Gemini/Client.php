@@ -73,8 +73,13 @@ class Client extends AbstractClient
             // Parse Gemini response
             $geminiResponse = json_decode($response->getBody()->getContents(), true);
 
-            // Convert to OpenAI format with cache write tokens
-            $standardResponse = ResponseHandler::convertResponse($geminiResponse, $model, $cacheWriteTokens);
+            // Calculate context hash for thought signature caching
+            // This is the cumulative hash of all messages sent in the request
+            $messages = $chatRequest->getMessages();
+            $contextHash = ThoughtSignatureCache::calculateContextHash($messages, count($messages));
+
+            // Convert to OpenAI format with cache write tokens and context hash
+            $standardResponse = ResponseHandler::convertResponse($geminiResponse, $model, $cacheWriteTokens, $contextHash);
             $chatResponse = new ChatCompletionResponse($standardResponse, $this->logger);
 
             // Cache thought signatures from tool calls
@@ -143,8 +148,13 @@ class Client extends AbstractClient
 
             $firstResponseDuration = $this->calculateDuration($startTime);
 
-            // Create stream converter with cache write tokens
-            $streamConverter = new StreamConverter($response, $this->logger, $model, $cacheWriteTokens);
+            // Calculate context hash for thought signature caching
+            // This is the cumulative hash of all messages sent in the request
+            $messages = $chatRequest->getMessages();
+            $contextHash = ThoughtSignatureCache::calculateContextHash($messages, count($messages));
+
+            // Create stream converter with cache write tokens and context hash
+            $streamConverter = new StreamConverter($response, $this->logger, $model, $cacheWriteTokens, $contextHash);
 
             $chatCompletionStreamResponse = new ChatCompletionStreamResponse(
                 logger: $this->logger,

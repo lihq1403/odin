@@ -52,6 +52,18 @@ class StreamConverter implements IteratorAggregate
     private array $candidateHasToolCalls = [];
 
     /**
+     * Track content for each candidate (for normal messages without tool calls).
+     * Structure: [candidateIndex => string].
+     */
+    private array $contentTracker = [];
+
+    /**
+     * Track thoughtSignature for each candidate (for normal messages).
+     * Structure: [candidateIndex => string].
+     */
+    private array $thoughtSignatureTracker = [];
+
+    /**
      * Strategy for handling function call arguments in streaming mode.
      * - 'complete': Each chunk contains complete args (Gemini's current behavior)
      * - 'incremental': Each chunk contains partial args that need to be merged
@@ -61,16 +73,24 @@ class StreamConverter implements IteratorAggregate
 
     private int $cacheWriteTokens;
 
+    /**
+     * Context hash for thought signature caching.
+     * Represents the cumulative hash of all previous messages.
+     */
+    private string $contextHash;
+
     public function __construct(
         ResponseInterface $response,
         ?LoggerInterface $logger,
         string $model,
-        int $cacheWriteTokens = 0
+        int $cacheWriteTokens = 0,
+        string $contextHash = ''
     ) {
         $this->response = $response;
         $this->logger = $logger;
         $this->model = $model;
         $this->cacheWriteTokens = $cacheWriteTokens;
+        $this->contextHash = $contextHash;
     }
 
     /**
@@ -250,6 +270,11 @@ class StreamConverter implements IteratorAggregate
             $this->candidateHasToolCalls[$candidateIndex] = false;
         }
 
+        // Initialize content tracker for this candidate if not exists
+        if (! isset($this->contentTracker[$candidateIndex])) {
+            $this->contentTracker[$candidateIndex] = '';
+        }
+
         foreach ($parts as $part) {
             // Check if this is a thought part
             $isThought = isset($part['thought']) && $part['thought'] === true;
@@ -268,7 +293,14 @@ class StreamConverter implements IteratorAggregate
                         $delta['content'] = '';
                     }
                     $delta['content'] .= $part['text'];
+                    // Track content for cache key generation
+                    $this->contentTracker[$candidateIndex] .= $part['text'];
                 }
+            }
+
+            // Capture thoughtSignature for normal messages (can be on text part or standalone)
+            if (isset($part['thoughtSignature']) && ! isset($part['functionCall'])) {
+                $this->thoughtSignatureTracker[$candidateIndex] = $part['thoughtSignature'];
             }
 
             // Handle function call delta
@@ -639,14 +671,32 @@ class StreamConverter implements IteratorAggregate
     }
 
     /**
-     * Cache thought signatures from all tool calls tracked during streaming.
+     * Cache thought signatures from all tool calls and normal messages tracked during streaming.
      */
     private function cacheThoughtSignatures(): void
     {
+        // Cache tool call thought signatures
         foreach ($this->toolCallTracker as $candidateIndex => $toolCalls) {
             foreach ($toolCalls as $toolCallIndex => $toolCall) {
                 if (isset($toolCall['thought_signature'])) {
                     ThoughtSignatureCache::store($toolCall['id'], $toolCall['thought_signature']);
+                }
+            }
+        }
+
+        // Cache normal message thought signatures (for candidates without tool calls)
+        // Only cache if we have a context hash (otherwise we can't generate a unique key)
+        if ($this->contextHash === '') {
+            return;
+        }
+
+        foreach ($this->thoughtSignatureTracker as $candidateIndex => $thoughtSignature) {
+            // Only cache if this candidate has no tool calls
+            if (empty($this->candidateHasToolCalls[$candidateIndex])) {
+                $content = $this->contentTracker[$candidateIndex] ?? '';
+                if ($content !== '') {
+                    $cacheKey = ThoughtSignatureCache::generateMessageKey($this->contextHash, $content);
+                    ThoughtSignatureCache::store($cacheKey, $thoughtSignature);
                 }
             }
         }
