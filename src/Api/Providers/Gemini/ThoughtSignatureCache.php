@@ -29,7 +29,7 @@ class ThoughtSignatureCache
 {
     private const CACHE_PREFIX = 'gemini:thought_signature:';
 
-    private const CACHE_TTL = 3600;
+    private const CACHE_TTL = 7200;
 
     /**
      * Store a thought signature for a tool call.
