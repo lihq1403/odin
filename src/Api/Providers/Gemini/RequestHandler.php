@@ -396,7 +396,7 @@ class RequestHandler
         // According to API docs, thinkingConfig should be inside generationConfig
         $thinking = $request->getThinking();
         if (! empty($thinking)) {
-            $thinkingConfig = self::convertThinkingConfig($thinking);
+            $thinkingConfig = self::convertThinkingConfig($request->getModel(), $thinking);
             if (! empty($thinkingConfig)) {
                 $config['thinkingConfig'] = $thinkingConfig;
             }
@@ -408,13 +408,18 @@ class RequestHandler
     /**
      * Convert thinking config to Gemini format.
      */
-    private static function convertThinkingConfig(array $thinking): array
+    private static function convertThinkingConfig(string $model, array $thinking): array
     {
         $config = [];
 
         // Map thinking budget if present
         if (isset($thinking['thinking_budget'])) {
-            $config['thinkingBudget'] = $thinking['thinking_budget'];
+            if (str_starts_with($model, 'gemini-2')) {
+                $config['thinkingBudget'] = $thinking['thinking_budget'];
+            } else {
+                $config['includeThoughts'] = true;
+                $config['thinkingLevel'] = 'HIGH';
+            }
         }
 
         return $config;

@@ -60,11 +60,6 @@ class ResponseHandler
             $content = $candidate['content'] ?? [];
             $message = self::convertContent($content);
 
-            // Add reasoning content if present (from thinking)
-            if (isset($candidate['thinkingTrace'])) {
-                $message['reasoning_content'] = self::extractThinkingContent($candidate['thinkingTrace']);
-            }
-
             // Determine finish reason
             // If there are tool calls, finish_reason should be 'tool_calls'
             $finishReason = $candidate['finishReason'] ?? 'STOP';
@@ -116,12 +111,22 @@ class ResponseHandler
 
         $parts = $content['parts'] ?? [];
         $textParts = [];
+        $thoughtParts = [];
         $toolCalls = [];
 
         foreach ($parts as $part) {
+            // Check if this is a thought part
+            $isThought = isset($part['thought']) && $part['thought'] === true;
+
             // Handle text parts
             if (isset($part['text'])) {
-                $textParts[] = $part['text'];
+                if ($isThought) {
+                    // This is thinking/reasoning content
+                    $thoughtParts[] = $part['text'];
+                } else {
+                    // This is normal response content
+                    $textParts[] = $part['text'];
+                }
             }
 
             // Handle function calls (tool calls)
@@ -153,6 +158,11 @@ class ResponseHandler
 
         // Combine text parts
         $message['content'] = implode('', $textParts);
+
+        // Add reasoning content if present
+        if (! empty($thoughtParts)) {
+            $message['reasoning_content'] = implode("\n\n", $thoughtParts);
+        }
 
         // Add tool calls if present
         if (! empty($toolCalls)) {
@@ -238,22 +248,6 @@ class ResponseHandler
             'OTHER' => 'stop',
             default => 'stop',
         };
-    }
-
-    /**
-     * Extract thinking content from thinkingTrace.
-     */
-    private static function extractThinkingContent(array $thinkingTrace): string
-    {
-        $thoughts = [];
-
-        foreach ($thinkingTrace as $trace) {
-            if (isset($trace['thought'])) {
-                $thoughts[] = $trace['thought'];
-            }
-        }
-
-        return implode("\n", $thoughts);
     }
 
     /**

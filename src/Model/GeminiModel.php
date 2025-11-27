@@ -12,12 +12,31 @@ declare(strict_types=1);
 
 namespace Hyperf\Odin\Model;
 
+use Hyperf\Odin\Api\Request\ChatCompletionRequest;
+use Hyperf\Odin\Api\Response\ChatCompletionResponse;
+use Hyperf\Odin\Api\Response\ChatCompletionStreamResponse;
 use Hyperf\Odin\Contract\Api\ClientInterface;
 use Hyperf\Odin\Factory\ClientFactory;
 
 class GeminiModel extends AbstractModel
 {
     protected bool $streamIncludeUsage = true;
+
+    public function chatWithRequest(ChatCompletionRequest $request): ChatCompletionResponse
+    {
+        $request->setThinking([
+            'thinking_budget' => -1,
+        ]);
+        return parent::chatWithRequest($request);
+    }
+
+    public function chatStreamWithRequest(ChatCompletionRequest $request): ChatCompletionStreamResponse
+    {
+        $request->setThinking([
+            'thinking_budget' => -1,
+        ]);
+        return parent::chatStreamWithRequest($request);
+    }
 
     /**
      * Get client instance.

@@ -205,6 +205,9 @@ class StreamConverter implements IteratorAggregate
                 } else {
                     $choice['finish_reason'] = $this->convertFinishReason($finishReason);
                 }
+
+                // Note: reasoning_content is now streamed incrementally in each chunk
+                // No need to output accumulated content here
             }
 
             $choices[] = $choice;
@@ -248,12 +251,24 @@ class StreamConverter implements IteratorAggregate
         }
 
         foreach ($parts as $part) {
+            // Check if this is a thought part
+            $isThought = isset($part['thought']) && $part['thought'] === true;
+
             // Handle text delta
             if (isset($part['text'])) {
-                if (! isset($delta['content'])) {
-                    $delta['content'] = '';
+                if ($isThought) {
+                    // This is thinking/reasoning content - output immediately in stream
+                    if (! isset($delta['reasoning_content'])) {
+                        $delta['reasoning_content'] = '';
+                    }
+                    $delta['reasoning_content'] .= $part['text'];
+                } else {
+                    // This is normal response content
+                    if (! isset($delta['content'])) {
+                        $delta['content'] = '';
+                    }
+                    $delta['content'] .= $part['text'];
                 }
-                $delta['content'] .= $part['text'];
             }
 
             // Handle function call delta
