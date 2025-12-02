@@ -278,7 +278,7 @@ $content = '';
 foreach ($response as $choice) {
     /** @var AssistantMessage $message */
     $message = $choice->getMessage();
-    $delta = $message->getReasoningContent() ?? $message->getContent();
+    $delta = $message->getReasoningContent() ?: $message->getContent();
     if ($delta !== null) {
         echo $delta;
         $content .= $delta;

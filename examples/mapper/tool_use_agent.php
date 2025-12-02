@@ -185,7 +185,7 @@ $response = $agent->chat($userMessage);
 
 $message = $response->getFirstChoice()->getMessage();
 if ($message instanceof AssistantMessage) {
-    echo $message->getReasoningContent() . PHP_EOL;
+    echo '<think>' . PHP_EOL . $message->getReasoningContent() . PHP_EOL . '<think>' . PHP_EOL;
     echo $message->getContent();
 }
 
