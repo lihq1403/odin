@@ -16,11 +16,15 @@ use Hyperf\Odin\Contract\Api\ClientInterface;
 use Hyperf\Odin\Factory\ClientFactory;
 use Hyperf\Odin\Utils\ModelUtil;
 
+use function Hyperf\Config\config;
+
 /**
  * OpenAI模型实现.
  *
- * 支持智能路由：当使用qwen系列模型时，自动切换到DashScope客户端；
- * 其他模型继续使用OpenAI客户端。这确保了向后兼容性。
+ * 支持智能路由（需在配置中启用）：
+ * - 当使用qwen系列模型时，自动切换到DashScope客户端
+ * - 当使用deepseek系列模型时，自动切换到DeepSeek客户端
+ * - 其他模型继续使用OpenAI客户端
  */
 class OpenAIModel extends AbstractModel
 {
@@ -28,7 +32,7 @@ class OpenAIModel extends AbstractModel
 
     /**
      * 获取客户端实例，根据模型类型智能路由.
-     * 如果是qwen系列模型，使用DashScope客户端；否则使用OpenAI客户端.
+     * 智能路由功能需要在配置中启用，默认关闭.
      */
     protected function getClient(): ClientInterface
     {
@@ -36,11 +40,22 @@ class OpenAIModel extends AbstractModel
         $config = $this->config;
         $this->processApiBaseUrl($config);
 
-        // 检查是否为qwen系列模型
-        if (ModelUtil::isQwenModel($this->model)) {
+        // 检查是否启用了Qwen智能路由，且为qwen系列模型
+        if ($this->isSmartRoutingEnabled('qwen') && ModelUtil::isQwenModel($this->model)) {
             // 使用ClientFactory统一创建DashScope客户端
             return ClientFactory::createClient(
                 'dashscope',
+                $config,
+                $this->getApiRequestOptions(),
+                $this->logger
+            );
+        }
+
+        // 检查是否启用了DeepSeek智能路由，且为deepseek系列模型
+        if ($this->isSmartRoutingEnabled('deepseek') && ModelUtil::isDeepSeekModel($this->model)) {
+            // 使用ClientFactory统一创建DeepSeek客户端
+            return ClientFactory::createClient(
+                'deepseek',
                 $config,
                 $this->getApiRequestOptions(),
                 $this->logger
@@ -63,5 +78,15 @@ class OpenAIModel extends AbstractModel
     protected function getApiVersionPath(): string
     {
         return 'v1';
+    }
+
+    /**
+     * 检查指定类型的智能路由是否启用.
+     *
+     * @param string $type 路由类型：'qwen' 或 'deepseek'
+     */
+    private function isSmartRoutingEnabled(string $type): bool
+    {
+        return (bool) config("odin.llm.smart_routing.{$type}", false);
     }
 }
