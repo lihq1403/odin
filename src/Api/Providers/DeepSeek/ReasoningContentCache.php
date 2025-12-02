@@ -33,9 +33,9 @@ class ReasoningContentCache
     private const CACHE_PREFIX = 'deepseek:reasoning_content:';
 
     /**
-     * Default cache TTL in seconds (2 hours).
+     * Default cache TTL in seconds.
      */
-    private const CACHE_TTL = 7200;
+    private const CACHE_TTL = 1800;
 
     /**
      * Store reasoning content for a tool call.
