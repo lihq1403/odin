@@ -294,8 +294,10 @@ abstract class AbstractClient implements ClientInterface
         if ($this->getBaseUri()) {
             $options['base_uri'] = $this->getBaseUri();
         }
-        if ($this->requestOptions->getProxy()) {
-            $options['proxy'] = $this->requestOptions->getProxy();
+        // Apply proxy configuration (supports HTTP/HTTPS and SOCKS5 proxies)
+        $proxyConfig = $this->requestOptions->getGuzzleProxyConfig();
+        if (! empty($proxyConfig)) {
+            $options = array_merge($options, $proxyConfig);
         }
 
         // 从 requestOptions 获取 HTTP 处理器配置
@@ -335,6 +337,7 @@ abstract class AbstractClient implements ClientInterface
             'url' => $url,
             'options' => $options,
             'request_id' => $requestId,
+            'has_proxy' => $this->requestOptions->hasProxy(),
         ];
 
         $this->logger?->info($logType, LoggingConfigHelper::filterAndFormatLogData($logData, $this->requestOptions));

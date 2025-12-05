@@ -12,6 +12,8 @@ declare(strict_types=1);
 
 namespace Hyperf\Odin\Api\RequestOptions;
 
+use Hyperf\Odin\Utils\ProxyUtil;
+
 /**
  * API选项配置.
  * 该类专门用于配置API相关的参数，如超时设置等.
@@ -219,6 +221,39 @@ class ApiOptions
     public function hasProxy(): bool
     {
         return $this->proxy !== null;
+    }
+
+    /**
+     * 检查是否为 SOCKS5 代理.
+     */
+    public function isSocks5Proxy(): bool
+    {
+        if ($this->proxy === null) {
+            return false;
+        }
+        return ProxyUtil::isSocks5($this->proxy);
+    }
+
+    /**
+     * 获取 Guzzle 客户端的代理配置.
+     * 对于 SOCKS5 代理，返回 curl 选项；对于 HTTP/HTTPS 代理，返回标准 proxy 选项.
+     *
+     * @return array{proxy?: string, curl?: array<int, mixed>}
+     */
+    public function getGuzzleProxyConfig(): array
+    {
+        return ProxyUtil::getGuzzleProxyConfig($this->proxy);
+    }
+
+    /**
+     * 获取 cURL 代理选项数组.
+     * 用于原生 cURL 调用.
+     *
+     * @return array<int, mixed>
+     */
+    public function getCurlProxyOptions(): array
+    {
+        return ProxyUtil::getCurlProxyOptions($this->proxy);
     }
 
     /**

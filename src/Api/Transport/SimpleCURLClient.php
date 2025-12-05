@@ -20,6 +20,7 @@ use Hyperf\Odin\Exception\LLMException\Network\LLMConnectionTimeoutException;
 use Hyperf\Odin\Exception\LLMException\Network\LLMReadTimeoutException;
 use Hyperf\Odin\Exception\RuntimeException;
 use Hyperf\Odin\Utils\LogUtil;
+use Hyperf\Odin\Utils\ProxyUtil;
 use Throwable;
 
 if (! in_array('OdinSimpleCurl', stream_get_wrappers())) {
@@ -112,8 +113,9 @@ class SimpleCURLClient
             CURLOPT_SSL_VERIFYHOST => $this->options['verify'] ?? 2,
         ]);
 
+        // Apply proxy configuration (supports HTTP/HTTPS and SOCKS5 proxies)
         if (isset($this->options['proxy'])) {
-            curl_setopt($this->ch, CURLOPT_PROXY, $this->options['proxy']);
+            ProxyUtil::applyCurlProxy($this->ch, $this->options['proxy']);
         }
 
         $curlExecutor = function () {

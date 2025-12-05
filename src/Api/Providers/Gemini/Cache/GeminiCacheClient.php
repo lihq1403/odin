@@ -45,9 +45,10 @@ class GeminiCacheClient
             'connect_timeout' => $apiOptions?->getConnectionTimeout() ?? 5.0,
         ];
 
-        // Add proxy if configured
+        // Apply proxy configuration (supports HTTP/HTTPS and SOCKS5 proxies)
         if ($apiOptions && $apiOptions->hasProxy()) {
-            $clientOptions['proxy'] = $apiOptions->getProxy();
+            $proxyConfig = $apiOptions->getGuzzleProxyConfig();
+            $clientOptions = array_merge($clientOptions, $proxyConfig);
         }
 
         $this->client = new Client($clientOptions);
