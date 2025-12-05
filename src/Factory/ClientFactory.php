@@ -210,7 +210,7 @@ class ClientFactory
                 enableCache: (bool) ($autoCacheConfig['enable_cache'] ?? false),
                 minCacheTokens: $autoCacheConfig['min_cache_tokens'] ?? 4096,
                 refreshThreshold: $autoCacheConfig['refresh_threshold'] ?? 8000,
-                cacheTtl: $autoCacheConfig['cache_ttl'] ?? 600,
+                cacheTtl: $autoCacheConfig['cache_ttl'] ?? 300,
                 estimationRatio: (float) ($autoCacheConfig['estimation_ratio'] ?? 0.33)
             );
         }
