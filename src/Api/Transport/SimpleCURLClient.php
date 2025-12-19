@@ -104,10 +104,10 @@ class SimpleCURLClient
             CURLOPT_WRITEFUNCTION => [$this, 'writeFunction'],
             CURLOPT_POSTFIELDS => $postData,
 
-            CURLOPT_CONNECTTIMEOUT => $this->options['connect_timeout'] ?? 30,
+            CURLOPT_CONNECTTIMEOUT => $this->options['connect_timeout'] ?? 5,
             CURLOPT_TIMEOUT => 0,
             CURLOPT_LOW_SPEED_LIMIT => 1,
-            CURLOPT_LOW_SPEED_TIME => $this->options['stream_chunk'] ?? 120,
+            CURLOPT_LOW_SPEED_TIME => $this->options['stream_chunk'] ?? 60,
 
             CURLOPT_SSL_VERIFYPEER => $this->options['verify'] ?? true,
             CURLOPT_SSL_VERIFYHOST => $this->options['verify'] ?? 2,
