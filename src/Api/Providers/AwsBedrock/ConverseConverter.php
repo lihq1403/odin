@@ -89,6 +89,11 @@ class ConverseConverter implements ConverterInterface
                 } elseif ($result === []) {
                     // It was empty object {}, convert to empty object
                     $result = new stdClass();
+                } else {
+                    // Handle JSON-encoded string (e.g., "some string" -> {"result": "some string"})
+                    $result = [
+                        'result' => $result,
+                    ];
                 }
             }
 
