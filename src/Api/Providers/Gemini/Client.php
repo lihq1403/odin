@@ -295,6 +295,19 @@ class Client extends AbstractClient
             }
         }
 
+        // Safety check: ensure at least one message remains
+        // This prevents "contents is not specified" error when all messages are filtered
+        if (empty($newMessages) && ! empty($messages)) {
+            // Keep the last message (current user message should not be cached)
+            $lastMessage = end($messages);
+            $newMessages[] = $lastMessage;
+
+            $this->logger?->warning('All messages were filtered by cache, keeping last message', [
+                'last_message_hash' => $lastMessage->getHash(),
+                'total_messages' => count($messages),
+            ]);
+        }
+
         $chatRequest->setFilterMessages($newMessages);
         $chatRequest->setMessages($newMessages);
         $chatRequest->setTools([]);
