@@ -205,8 +205,13 @@ class ResponseHandler
         // Gemini format:
         // - promptTokenCount: tokens from new input (not from cache)
         // - cachedContentTokenCount: tokens read from cache
-        $inputTokens = $usageMetadata['promptTokenCount'] ?? 0;
         $cacheReadTokens = $usageMetadata['cachedContentTokenCount'] ?? 0;
+        $inputTokens = $usageMetadata['promptTokenCount'] ?? 0 - $cacheReadTokens;
+
+        // 如果有 $cacheWriteTokens，代表是第一次写入，那么本次虽然会读取到缓存但是不计入读取量
+        if ($cacheWriteTokens > 0) {
+            $cacheReadTokens = 0;
+        }
 
         // OpenAI format: prompt_tokens = total prompt tokens (including cache)
         // Following AWS Bedrock's implementation for consistency
