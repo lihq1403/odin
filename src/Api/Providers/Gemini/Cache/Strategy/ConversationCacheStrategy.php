@@ -439,7 +439,7 @@ class ConversationCacheStrategy implements CacheStrategyInterface
         LocalCachedData $localCachedData,
         int $ttl
     ): void {
-        $this->cache->set($cacheKey, $localCachedData->toArray(), $ttl);
+        $this->cache->set($cacheKey, $localCachedData->toArray(), $ttl - 10);
     }
 
     /**
