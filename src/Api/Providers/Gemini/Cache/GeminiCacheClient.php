@@ -66,11 +66,6 @@ class GeminiCacheClient
     {
         $url = $this->getBaseUri() . '/cachedContents';
 
-        // Ensure model name has 'models/' prefix (required by Gemini Cache API)
-        if (! str_starts_with($model, 'models/')) {
-            $model = 'models/' . $model;
-        }
-
         // Merge config fields directly into body according to Gemini API spec
         $body = array_merge(
             ['model' => $model],

@@ -392,4 +392,17 @@ abstract class AbstractClient implements ClientInterface
         // 合并认证头
         return array_merge($headers, $this->getAuthHeaders());
     }
+
+    /**
+     * 规范化模型名称.
+     * 默认实现：直接返回原始模型名称，不做任何修改.
+     * 子类可以根据具体服务商的要求重写此方法.
+     * 
+     * @param string $model 原始模型名称
+     * @return string 规范化后的模型名称
+     */
+    public function normalizeModelName(string $model): string
+    {
+        return $model;
+    }
 }

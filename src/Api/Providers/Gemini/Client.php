@@ -178,6 +178,52 @@ class Client extends AbstractClient
     }
 
     /**
+     * 规范化模型名称为 Gemini 标准格式.
+     * 根据不同的 API 平台使用不同的格式：
+     * - Generative Language API (generativelanguage.googleapis.com): "models/{model}"
+     * - AI Platform API (aiplatform.googleapis.com): "publishers/google/models/{model}"
+     *
+     * @param string $model 原始模型名称
+     * @return string 标准格式的模型名称
+     */
+    public function normalizeModelName(string $model): string
+    {
+        $isAiPlatform = $this->isAiPlatformApi();
+
+        if ($isAiPlatform) {
+            // AI Platform API 格式: publishers/google/models/{model}
+            // 如果已经是完整格式，直接返回
+            if (str_starts_with($model, 'publishers/google/models/')) {
+                return $model;
+            }
+
+            // 如果是 models/ 开头，提取模型名称
+            if (str_starts_with($model, 'models/')) {
+                $modelName = substr($model, 7); // 去掉 "models/"
+                return 'publishers/google/models/' . $modelName;
+            }
+
+            // 否则直接添加前缀
+            return 'publishers/google/models/' . $model;
+        }
+
+        // Generative Language API 格式: models/{model}
+        // 如果已经是标准格式 "models/xxx"，直接返回
+        if (str_starts_with($model, 'models/')) {
+            return $model;
+        }
+
+        // 如果是 publishers/google/models/ 开头，提取模型名称
+        if (str_starts_with($model, 'publishers/google/models/')) {
+            $modelName = substr($model, 25); // 去掉 "publishers/google/models/"
+            return 'models/' . $modelName;
+        }
+
+        // 否则添加 "models/" 前缀
+        return 'models/' . $model;
+    }
+
+    /**
      * Build chat completions API URL (for compatibility).
      */
     protected function buildChatCompletionsUrl(): string
@@ -350,6 +396,17 @@ class Client extends AbstractClient
     }
 
     /**
+     * 判断是否使用 AI Platform API.
+     * 
+     * @return bool true 表示使用 aiplatform.googleapis.com，false 表示使用 generativelanguage.googleapis.com
+     */
+    private function isAiPlatformApi(): bool
+    {
+        $baseUri = $this->getBaseUri();
+        return str_contains($baseUri, 'aiplatform.googleapis.com');
+    }
+
+    /**
      * Build Gemini native API URL.
      */
     private function buildGeminiUrl(string $model, bool $stream): string
@@ -357,10 +414,8 @@ class Client extends AbstractClient
         $baseUri = $this->getBaseUri();
         $endpoint = $stream ? 'streamGenerateContent' : 'generateContent';
 
-        // URL format: https://generativelanguage.googleapis.com/v1beta/models/{model}:{endpoint}
-        $url = "{$baseUri}/models/{$model}:{$endpoint}";
+        $url = "{$baseUri}/{$model}:{$endpoint}";
 
-        // Add alt=sse parameter for streaming requests (SSE format)
         if ($stream) {
             $url .= '?alt=sse';
         }

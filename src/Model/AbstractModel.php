@@ -98,6 +98,7 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
             $request->setStream(false);
 
             $client = $this->getClient();
+            $request->setModel($client->normalizeModelName($request->getModel()));
             $response = $client->chatCompletions($request);
 
             // 统一检查响应内容是否为空
@@ -124,6 +125,7 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
             $request->setStreamIncludeUsage($this->streamIncludeUsage);
 
             $client = $this->getClient();
+            $request->setModel($client->normalizeModelName($request->getModel()));
             return $client->chatCompletionsStream($request);
         });
     }
