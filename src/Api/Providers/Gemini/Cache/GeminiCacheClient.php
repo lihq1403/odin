@@ -57,14 +57,17 @@ class GeminiCacheClient
     /**
      * 创建缓存.
      *
-     * @param string $model 模型名称
+     * @param string $model 模型名称，支持以下格式：
+     *                      - models/{model}
+     *                      - projects/{project}/locations/{location}/publishers/{publisher}/models/{model}
      * @param array $config 缓存配置，包含 systemInstruction, tools, contents, ttl
      * @return array 缓存响应数据，包含 name 和 usageMetadata
      * @throws Exception
      */
     public function createCache(string $model, array $config): array
     {
-        $url = $this->getBaseUri() . '/cachedContents';
+        // 构建缓存 API URL
+        $url = $this->buildCacheUrl($model);
 
         // Merge config fields directly into body according to Gemini API spec
         $body = array_merge(
@@ -139,12 +142,15 @@ class GeminiCacheClient
     /**
      * 删除缓存.
      *
-     * @param string $cacheName 缓存名称（如 cachedContents/xxx）
+     * @param string $cacheName 缓存名称，支持以下格式：
+     *                          - cachedContents/xxx
+     *                          - projects/{project}/locations/{location}/cachedContents/{cacheId}
      * @throws Exception
      */
     public function deleteCache(string $cacheName): void
     {
-        $url = $this->getBaseUri() . '/' . $cacheName;
+        // 如果是完整资源路径，直接使用；否则拼接 baseUri
+        $url = $this->buildCacheResourceUrl($cacheName);
 
         $options = [
             RequestOptions::HEADERS => $this->getHeaders(),
@@ -173,13 +179,16 @@ class GeminiCacheClient
     /**
      * 获取缓存信息.
      *
-     * @param string $cacheName 缓存名称（如 cachedContents/xxx）
+     * @param string $cacheName 缓存名称，支持以下格式：
+     *                          - cachedContents/xxx
+     *                          - projects/{project}/locations/{location}/cachedContents/{cacheId}
      * @return array 缓存信息
      * @throws Exception
      */
     public function getCache(string $cacheName): array
     {
-        $url = $this->getBaseUri() . '/' . $cacheName;
+        // 如果是完整资源路径，直接使用；否则拼接 baseUri
+        $url = $this->buildCacheResourceUrl($cacheName);
 
         $options = [
             RequestOptions::HEADERS => $this->getHeaders(),
@@ -215,5 +224,88 @@ class GeminiCacheClient
     private function getBaseUri(): string
     {
         return rtrim($this->config->getBaseUrl(), '/');
+    }
+
+    /**
+     * 获取 Vertex AI URL 组件 (scheme, host, version).
+     *
+     * @return array{scheme: string, host: string, version: string}
+     */
+    private function getVertexAiUrlComponents(): array
+    {
+        $baseUrl = parse_url($this->config->getBaseUrl());
+        $scheme = $baseUrl['scheme'] ?? 'https';
+        $host = $baseUrl['host'] ?? 'aiplatform.googleapis.com';
+
+        // 提取版本号 (v1, v1beta1 等)
+        $path = $baseUrl['path'] ?? '';
+        $version = 'v1'; // 默认版本
+        if (preg_match('#/(v\d+(?:beta\d+)?)[/]*#', $path, $versionMatches)) {
+            $version = $versionMatches[1];
+        }
+
+        return [
+            'scheme' => $scheme,
+            'host' => $host,
+            'version' => $version,
+        ];
+    }
+
+    /**
+     * 根据 model 格式构建缓存 API URL.
+     *
+     * @param string $model 模型名称
+     * @return string 缓存 API URL
+     */
+    private function buildCacheUrl(string $model): string
+    {
+        // 如果是完整资源路径格式: projects/{project}/locations/{location}/publishers/{publisher}/models/{model}
+        if (preg_match('#^projects/([^/]+)/locations/([^/]+)/#', $model, $matches)) {
+            $project = $matches[1];
+            $location = $matches[2];
+
+            // 构建 Vertex AI 缓存端点
+            // URL 格式: {baseUrl}/projects/{project}/locations/{location}/cachedContents
+            $components = $this->getVertexAiUrlComponents();
+
+            return sprintf(
+                '%s://%s/%s/projects/%s/locations/%s/cachedContents',
+                $components['scheme'],
+                $components['host'],
+                $components['version'],
+                $project,
+                $location
+            );
+        }
+
+        // 默认格式，使用 baseUri
+        return $this->getBaseUri() . '/cachedContents';
+    }
+
+    /**
+     * 根据 cacheName 格式构建缓存资源 URL (用于 get/delete 操作).
+     *
+     * @param string $cacheName 缓存名称
+     * @return string 缓存资源 URL
+     */
+    private function buildCacheResourceUrl(string $cacheName): string
+    {
+        // 如果是完整资源路径格式: projects/{project}/locations/{location}/cachedContents/{cacheId}
+        // 需要构建 Vertex AI 格式的完整 URL
+        if (str_starts_with($cacheName, 'projects/')) {
+            $components = $this->getVertexAiUrlComponents();
+
+            // URL 格式: {scheme}://{host}/{version}/{cacheName}
+            return sprintf(
+                '%s://%s/%s/%s',
+                $components['scheme'],
+                $components['host'],
+                $components['version'],
+                $cacheName
+            );
+        }
+
+        // 默认格式 (Generative Language API)，使用 baseUri + cacheName
+        return $this->getBaseUri() . '/' . $cacheName;
     }
 }
