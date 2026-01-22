@@ -153,7 +153,7 @@ class RequestHandler
     /**
      * Convert messages array from OpenAI format to Gemini contents format.
      * Made public for use in cache strategies (GlobalCacheStrategy, UserCacheStrategy).
-     * 
+     *
      * Important: Gemini API requires that multiple function responses corresponding to
      * function calls in the same turn must be merged into a single user turn.
      * This method automatically merges consecutive ToolMessages into a single turn.
@@ -337,7 +337,7 @@ class RequestHandler
 
     /**
      * Convert ToolMessage to Gemini format.
-     * 
+     *
      * Note: This method returns a complete turn structure with role and parts.
      * However, in convertMessages(), the parts are extracted and merged with other
      * consecutive ToolMessages to form a single user turn (as required by Gemini API).

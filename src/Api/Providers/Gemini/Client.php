@@ -181,13 +181,21 @@ class Client extends AbstractClient
      * 规范化模型名称为 Gemini 标准格式.
      * 根据不同的 API 平台使用不同的格式：
      * - Generative Language API (generativelanguage.googleapis.com): "models/{model}"
-     * - AI Platform API (aiplatform.googleapis.com): "publishers/google/models/{model}"
+     * - AI Platform API (aiplatform.googleapis.com):
+     *   - 简短格式: "publishers/google/models/{model}"
+     *   - 完整资源路径: "projects/{project}/locations/{location}/publishers/{publisher}/models/{model}".
      *
      * @param string $model 原始模型名称
      * @return string 标准格式的模型名称
      */
     public function normalizeModelName(string $model): string
     {
+        // 如果是 AI Platform 完整资源路径格式 projects/{project}/locations/{location}/publishers/*/models/*
+        // 直接返回，不做任何转换
+        if (str_starts_with($model, 'projects/')) {
+            return $model;
+        }
+
         $isAiPlatform = $this->isAiPlatformApi();
 
         if ($isAiPlatform) {
@@ -284,6 +292,10 @@ class Client extends AbstractClient
         $cacheConfig = $config->getCacheConfig();
         if (! $cacheConfig) {
             return null;
+        }
+
+        if ($this->isAiPlatformApi()) {
+            $cacheConfig->setEnableCache(false);
         }
 
         try {
@@ -397,7 +409,7 @@ class Client extends AbstractClient
 
     /**
      * 判断是否使用 AI Platform API.
-     * 
+     *
      * @return bool true 表示使用 aiplatform.googleapis.com，false 表示使用 generativelanguage.googleapis.com
      */
     private function isAiPlatformApi(): bool

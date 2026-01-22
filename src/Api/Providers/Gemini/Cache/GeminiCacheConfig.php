@@ -120,4 +120,9 @@ class GeminiCacheConfig
             default => 4096,
         };
     }
+
+    public function setEnableCache(bool $enableCache): void
+    {
+        $this->enableCache = $enableCache;
+    }
 }
