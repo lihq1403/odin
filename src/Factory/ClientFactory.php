@@ -26,6 +26,7 @@ use Hyperf\Odin\Api\Providers\DeepSeek\DeepSeekConfig;
 use Hyperf\Odin\Api\Providers\Gemini\Cache\GeminiCacheConfig;
 use Hyperf\Odin\Api\Providers\Gemini\Gemini;
 use Hyperf\Odin\Api\Providers\Gemini\GeminiConfig;
+use Hyperf\Odin\Api\Providers\Gemini\ServiceAccountConfig;
 use Hyperf\Odin\Api\Providers\OpenAI\OpenAI;
 use Hyperf\Odin\Api\Providers\OpenAI\OpenAIConfig;
 use Hyperf\Odin\Api\RequestOptions\ApiOptions;
@@ -215,11 +216,19 @@ class ClientFactory
             );
         }
 
+        $serviceAccountConfig = null;
+        if (isset($config['service_account'])) {
+            $serviceAccountConfig = ServiceAccountConfig::fromArray($config['service_account']);
+        } elseif (isset($config['service_account_key_path'])) {
+            $serviceAccountConfig = ServiceAccountConfig::fromFile($config['service_account_key_path']);
+        }
+
         // 创建配置对象
         $clientConfig = new GeminiConfig(
             apiKey: $apiKey,
             baseUrl: $baseUrl,
-            skipApiKeyValidation: $skipApiKeyValidation
+            skipApiKeyValidation: $skipApiKeyValidation,
+            serviceAccountConfig: $serviceAccountConfig,
         );
 
         // 设置缓存配置

@@ -23,9 +23,9 @@ use Throwable;
 
 /**
  * Gemini 缓存 API 客户端.
- * 封装缓存相关的 API 调用.
+ * 使用 x-goog-api-key 认证方式，适用于 Generative Language API.
  */
-class GeminiCacheClient
+class GeminiCacheClient implements GeminiCacheClientInterface
 {
     private Client $client;
 
@@ -227,31 +227,6 @@ class GeminiCacheClient
     }
 
     /**
-     * 获取 Vertex AI URL 组件 (scheme, host, version).
-     *
-     * @return array{scheme: string, host: string, version: string}
-     */
-    private function getVertexAiUrlComponents(): array
-    {
-        $baseUrl = parse_url($this->config->getBaseUrl());
-        $scheme = $baseUrl['scheme'] ?? 'https';
-        $host = $baseUrl['host'] ?? 'aiplatform.googleapis.com';
-
-        // 提取版本号 (v1, v1beta1 等)
-        $path = $baseUrl['path'] ?? '';
-        $version = 'v1'; // 默认版本
-        if (preg_match('#/(v\d+(?:beta\d+)?)[/]*#', $path, $versionMatches)) {
-            $version = $versionMatches[1];
-        }
-
-        return [
-            'scheme' => $scheme,
-            'host' => $host,
-            'version' => $version,
-        ];
-    }
-
-    /**
      * 根据 model 格式构建缓存 API URL.
      *
      * @param string $model 模型名称
@@ -259,26 +234,7 @@ class GeminiCacheClient
      */
     private function buildCacheUrl(string $model): string
     {
-        // 如果是完整资源路径格式: projects/{project}/locations/{location}/publishers/{publisher}/models/{model}
-        if (preg_match('#^projects/([^/]+)/locations/([^/]+)/#', $model, $matches)) {
-            $project = $matches[1];
-            $location = $matches[2];
-
-            // 构建 Vertex AI 缓存端点
-            // URL 格式: {baseUrl}/projects/{project}/locations/{location}/cachedContents
-            $components = $this->getVertexAiUrlComponents();
-
-            return sprintf(
-                '%s://%s/%s/projects/%s/locations/%s/cachedContents',
-                $components['scheme'],
-                $components['host'],
-                $components['version'],
-                $project,
-                $location
-            );
-        }
-
-        // 默认格式，使用 baseUri
+        // Generative Language API 格式: {baseUri}/cachedContents
         return $this->getBaseUri() . '/cachedContents';
     }
 
@@ -290,22 +246,8 @@ class GeminiCacheClient
      */
     private function buildCacheResourceUrl(string $cacheName): string
     {
-        // 如果是完整资源路径格式: projects/{project}/locations/{location}/cachedContents/{cacheId}
-        // 需要构建 Vertex AI 格式的完整 URL
-        if (str_starts_with($cacheName, 'projects/')) {
-            $components = $this->getVertexAiUrlComponents();
-
-            // URL 格式: {scheme}://{host}/{version}/{cacheName}
-            return sprintf(
-                '%s://%s/%s/%s',
-                $components['scheme'],
-                $components['host'],
-                $components['version'],
-                $cacheName
-            );
-        }
-
-        // 默认格式 (Generative Language API)，使用 baseUri + cacheName
+        // Generative Language API 格式: {baseUri}/{cacheName}
+        // cacheName 格式: cachedContents/{id}
         return $this->getBaseUri() . '/' . $cacheName;
     }
 }

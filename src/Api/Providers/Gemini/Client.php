@@ -294,7 +294,10 @@ class Client extends AbstractClient
             return null;
         }
 
-        if ($this->isAiPlatformApi()) {
+        // 只有 publishers/google/models/* 格式的模型不支持缓存
+        // projects/{project}/locations/{location}/publishers/*/models/* 格式支持 Vertex AI 缓存
+        $model = $chatRequest->getModel();
+        if (str_starts_with($model, 'publishers/google/models/')) {
             $cacheConfig->setEnableCache(false);
         }
 
