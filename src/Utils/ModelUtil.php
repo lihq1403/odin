@@ -34,6 +34,14 @@ class ModelUtil
     }
 
     /**
+     * 检查是否为kimi系列模型.
+     */
+    public static function isKimiModel(string $model): bool
+    {
+        return str_contains(strtolower($model), 'kimi');
+    }
+
+    /**
      * 获取模型提供商类型.
      *
      * @return string 返回 'dashscope'、'openai'、'deepseek' 等提供商标识
@@ -46,6 +54,10 @@ class ModelUtil
 
         if (self::isDeepSeekModel($model)) {
             return 'deepseek';
+        }
+
+        if (self::isKimiModel($model)) {
+            return 'deepseek'; // Kimi模型使用DeepSeek客户端以支持reasoning_content
         }
 
         return 'openai'; // 默认为 OpenAI
