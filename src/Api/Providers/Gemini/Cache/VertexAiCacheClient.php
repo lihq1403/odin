@@ -13,16 +13,13 @@ declare(strict_types=1);
 namespace Hyperf\Odin\Api\Providers\Gemini\Cache;
 
 use Exception;
-use Google\Auth\Credentials\ServiceAccountCredentials;
-use Google\Auth\HttpHandler\HttpHandlerFactory;
 use GuzzleHttp\Client;
 use GuzzleHttp\RequestOptions;
-use Hyperf\Context\ApplicationContext;
 use Hyperf\Odin\Api\Providers\Gemini\GeminiConfig;
 use Hyperf\Odin\Api\Providers\Gemini\ServiceAccountConfig;
+use Hyperf\Odin\Api\Providers\Gemini\ServiceAccountCredentialsManager;
 use Hyperf\Odin\Api\RequestOptions\ApiOptions;
 use Psr\Log\LoggerInterface;
-use Psr\SimpleCache\CacheInterface;
 use RuntimeException;
 use Throwable;
 
@@ -38,13 +35,7 @@ class VertexAiCacheClient implements GeminiCacheClientInterface
 
     private ?LoggerInterface $logger;
 
-    private ServiceAccountCredentials $credentials;
-
-    private CacheInterface $cache;
-
-    private ServiceAccountConfig $serviceAccountConfig;
-
-    private $httpHandler;
+    private ServiceAccountCredentialsManager $credentialsManager;
 
     /**
      * @param ServiceAccountConfig $serviceAccountConfig Service Account 配置
@@ -56,11 +47,14 @@ class VertexAiCacheClient implements GeminiCacheClientInterface
         ?LoggerInterface $logger = null
     ) {
         $this->config = $config;
-        $this->serviceAccountConfig = $serviceAccountConfig;
         $this->logger = $logger;
 
-        // 初始化缓存
-        $this->cache = ApplicationContext::getContainer()->get(CacheInterface::class);
+        // 初始化 Service Account 凭证管理器
+        $this->credentialsManager = new ServiceAccountCredentialsManager(
+            $serviceAccountConfig,
+            $apiOptions,
+            $logger
+        );
 
         // Build HTTP client options from ApiOptions
         $httpClientOptions = [
@@ -73,18 +67,6 @@ class VertexAiCacheClient implements GeminiCacheClientInterface
             $proxyConfig = $apiOptions->getGuzzleProxyConfig();
             $httpClientOptions = array_merge($httpClientOptions, $proxyConfig);
         }
-
-        // 创建用于 OAuth Token 请求的 HTTP Handler
-        // 使用带有 proxy 配置的 Guzzle Client
-        $authHttpClient = new Client($httpClientOptions);
-        $this->httpHandler = HttpHandlerFactory::build($authHttpClient);
-
-        // 初始化 Service Account 凭证
-        // 使用配置数组而不是文件路径，使用配置的 scopes
-        $this->credentials = new ServiceAccountCredentials(
-            $serviceAccountConfig->getScopes(),
-            $serviceAccountConfig->toArray()
-        );
 
         // Build cache API client options
         $clientOptions = array_merge(
@@ -262,60 +244,7 @@ class VertexAiCacheClient implements GeminiCacheClientInterface
      */
     private function getHeaders(): array
     {
-        return [
-            'Authorization' => 'Bearer ' . $this->getAccessToken(),
-        ];
-    }
-
-    /**
-     * 获取 Access Token.
-     * 使用缓存系统自动处理 token 缓存和刷新.
-     */
-    private function getAccessToken(): string
-    {
-        // 生成缓存 key，基于整个 serviceAccountConfig 确保唯一性
-        $cacheKey = 'vertex_ai_access_token:' . md5(serialize($this->serviceAccountConfig->toArray()));
-
-        try {
-            // 尝试从缓存获取 token
-            $cachedToken = $this->cache->get($cacheKey);
-            if ($cachedToken) {
-                $this->logger?->debug('Using cached access token', [
-                    'cache_key' => $cacheKey,
-                ]);
-                return $cachedToken;
-            }
-
-            // 缓存未命中，获取新的 access token
-            // 传入 httpHandler，使 token 请求也使用 proxy 配置
-            $authToken = $this->credentials->fetchAuthToken($this->httpHandler);
-
-            if (! isset($authToken['access_token'])) {
-                throw new RuntimeException('Failed to fetch access token: missing access_token in response');
-            }
-
-            $accessToken = $authToken['access_token'];
-
-            // 设置过期时间（默认 1 小时，提前 5 分钟刷新）
-            $expiresIn = $authToken['expires_in'] ?? 3600;
-            $cacheTtl = $expiresIn - 300; // 提前 5 分钟过期
-
-            // 存入缓存
-            $this->cache->set($cacheKey, $accessToken, $cacheTtl);
-
-            $this->logger?->debug('Access token refreshed and cached', [
-                'expires_in' => $expiresIn,
-                'cache_ttl' => $cacheTtl,
-                'expires_at' => date('Y-m-d H:i:s', time() + $expiresIn),
-            ]);
-
-            return $accessToken;
-        } catch (Throwable $e) {
-            $this->logger?->error('Failed to fetch access token', [
-                'error' => $e->getMessage(),
-            ]);
-            throw new RuntimeException('Failed to fetch access token: ' . $e->getMessage(), 0, $e);
-        }
+        return $this->credentialsManager->getAuthHeaders();
     }
 
     /**

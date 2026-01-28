@@ -27,6 +27,7 @@ use Hyperf\Odin\Event\AfterChatCompletionsStreamEvent;
 use Hyperf\Odin\Message\AssistantMessage;
 use Hyperf\Odin\Utils\EventUtil;
 use Psr\Log\LoggerInterface;
+use RuntimeException;
 use Throwable;
 
 class Client extends AbstractClient
@@ -264,6 +265,29 @@ class Client extends AbstractClient
         /** @var GeminiConfig $config */
         $config = $this->config;
 
+        // 判断是否使用 AI Platform API
+        if ($this->isAiPlatformApi()) {
+            // AI Platform API 使用 Service Account 认证
+            $serviceAccountConfig = $config->getServiceAccountConfig();
+
+            if (! $serviceAccountConfig) {
+                throw new RuntimeException(
+                    'Service Account configuration is required for AI Platform API. '
+                    . 'Please provide ServiceAccountConfig in GeminiConfig.'
+                );
+            }
+
+            // 创建凭证管理器获取认证头
+            $credentialsManager = new ServiceAccountCredentialsManager(
+                $serviceAccountConfig,
+                $this->requestOptions,
+                $this->logger
+            );
+
+            return $credentialsManager->getAuthHeaders();
+        }
+
+        // Generative Language API 使用 API Key 认证
         // Gemini uses x-goog-api-key header instead of Authorization
         if ($config->getApiKey()) {
             $headers['x-goog-api-key'] = $config->getApiKey();
