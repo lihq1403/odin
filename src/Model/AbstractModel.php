@@ -460,6 +460,10 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
         if ($message->hasToolCalls()) {
             return;
         }
+        // 如果有推理内容，即使 content 为空也是正常的（例如模型思考后因 MAX_TOKENS 限制未输出结果）
+        if ($message->hasReasoningContent()) {
+            return;
+        }
         $content = $message->getContent();
         if ($content === '' || trim($content) === '') {
             throw new LLMModelException('Model returned empty content response');
