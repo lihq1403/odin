@@ -346,9 +346,12 @@ abstract class AbstractClient implements ClientInterface
      */
     protected function logRequest(string $logType, string $url, array $options, string $requestId): void
     {
+        // 先对敏感数据进行脱敏处理
+        $maskedOptions = LogUtil::maskSensitiveData($options);
+
         $logData = [
             'url' => $url,
-            'options' => $options,
+            'options' => $maskedOptions,
             'request_id' => $requestId,
             'has_proxy' => $this->requestOptions->hasProxy(),
         ];
