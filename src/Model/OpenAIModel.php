@@ -12,9 +12,11 @@ declare(strict_types=1);
 
 namespace Hyperf\Odin\Model;
 
+use Hyperf\Context\ApplicationContext;
 use Hyperf\Odin\Contract\Api\ClientInterface;
 use Hyperf\Odin\Factory\ClientFactory;
 use Hyperf\Odin\Utils\ModelUtil;
+use Throwable;
 
 use function Hyperf\Config\config;
 
@@ -99,6 +101,13 @@ class OpenAIModel extends AbstractModel
      */
     private function isSmartRoutingEnabled(string $type): bool
     {
-        return (bool) config("odin.llm.smart_routing.{$type}", false);
+        try {
+            if (! ApplicationContext::hasContainer()) {
+                return false;
+            }
+            return (bool) config("odin.llm.smart_routing.{$type}", false);
+        } catch (Throwable) {
+            return false;
+        }
     }
 }
