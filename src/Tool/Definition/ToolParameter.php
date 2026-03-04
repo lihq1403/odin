@@ -888,11 +888,14 @@ class ToolParameter implements Arrayable
             $result['description'] = $schema['description'];
         }
 
-        // 处理对象类型的 properties
+        // 处理对象类型的 properties，空 properties 不输出（避免序列化为 JSON 数组）
         if (isset($schema['properties']) && is_array($schema['properties'])) {
-            $result['properties'] = [];
+            $processedProperties = [];
             foreach ($schema['properties'] as $propName => $propSchema) {
-                $result['properties'][$propName] = $this->processResolvedSchema($propSchema, $maxDepth, $currentDepth + 1, $fullSchema);
+                $processedProperties[$propName] = $this->processResolvedSchema($propSchema, $maxDepth, $currentDepth + 1, $fullSchema);
+            }
+            if (! empty($processedProperties)) {
+                $result['properties'] = $processedProperties;
             }
         }
 
@@ -933,17 +936,25 @@ class ToolParameter implements Arrayable
             unset($items['additionalProperties']);
         }
 
-        // 递归处理 items 中的对象属性
+        // 递归处理 items 中的对象属性，空 properties 直接移除（避免序列化为 JSON 数组导致 API 报错）
         if (isset($items['properties']) && is_array($items['properties'])) {
-            $processedProperties = [];
-            foreach ($items['properties'] as $propName => $propSchema) {
-                if (is_array($propSchema)) {
-                    $processedProperties[$propName] = $this->processResolvedSchema($propSchema, $maxDepth, $currentDepth + 1, $fullSchema);
+            if (empty($items['properties'])) {
+                unset($items['properties']);
+            } else {
+                $processedProperties = [];
+                foreach ($items['properties'] as $propName => $propSchema) {
+                    if (is_array($propSchema)) {
+                        $processedProperties[$propName] = $this->processResolvedSchema($propSchema, $maxDepth, $currentDepth + 1, $fullSchema);
+                    } else {
+                        $processedProperties[$propName] = $propSchema;
+                    }
+                }
+                if (! empty($processedProperties)) {
+                    $items['properties'] = $processedProperties;
                 } else {
-                    $processedProperties[$propName] = $propSchema;
+                    unset($items['properties']);
                 }
             }
-            $items['properties'] = $processedProperties;
         }
 
         // 递归处理嵌套的 items（数组的数组）
