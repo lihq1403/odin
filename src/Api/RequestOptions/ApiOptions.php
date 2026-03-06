@@ -61,6 +61,11 @@ class ApiOptions
     protected int $networkRetryCount = 0;
 
     /**
+     * @var bool 是否使用 Swow 原生 HTTP 客户端进行流式传输（需要 Swow 扩展且处于协程上下文）
+     */
+    protected bool $useSwowTransport = false;
+
+    /**
      * 构造函数.
      *
      * @param array $options 配置选项
@@ -90,6 +95,10 @@ class ApiOptions
         if (isset($options['network_retry_count']) && is_int($options['network_retry_count'])) {
             $this->networkRetryCount = $options['network_retry_count'];
         }
+
+        if (isset($options['use_swow_transport'])) {
+            $this->useSwowTransport = (bool) $options['use_swow_transport'];
+        }
     }
 
     /**
@@ -112,6 +121,7 @@ class ApiOptions
             'http_handler' => $this->httpHandler,
             'logging' => $this->logging,
             'network_retry_count' => $this->networkRetryCount,
+            'use_swow_transport' => $this->useSwowTransport,
         ];
     }
 
@@ -311,5 +321,24 @@ class ApiOptions
     public function getNetworkRetryCount(): int
     {
         return (int) max($this->networkRetryCount, 0);
+    }
+
+    /**
+     * 是否启用 Swow 原生 HTTP 客户端进行流式传输.
+     * 启用后，在 Swow 协程环境下流式请求将使用 SwowSSEClient 替代 OdinSimpleCurl.
+     * 注意：启用代理时无效，会自动降级为 OdinSimpleCurl.
+     */
+    public function isUseSwowTransport(): bool
+    {
+        return $this->useSwowTransport;
+    }
+
+    /**
+     * 设置是否使用 Swow 原生 HTTP 客户端进行流式传输.
+     */
+    public function setUseSwowTransport(bool $useSwowTransport): self
+    {
+        $this->useSwowTransport = $useSwowTransport;
+        return $this;
     }
 }

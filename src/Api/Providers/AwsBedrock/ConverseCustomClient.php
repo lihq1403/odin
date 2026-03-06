@@ -26,6 +26,7 @@ use Hyperf\Odin\Api\Response\ChatCompletionResponse;
 use Hyperf\Odin\Api\Response\ChatCompletionStreamResponse;
 use Hyperf\Odin\Api\Response\EmbeddingResponse;
 use Hyperf\Odin\Api\Transport\OdinSimpleCurl;
+use Hyperf\Odin\Api\Transport\SwowSSEClient;
 use Hyperf\Odin\Contract\Message\MessageInterface;
 use Hyperf\Odin\Event\AfterChatCompletionsEvent;
 use Hyperf\Odin\Event\AfterChatCompletionsStreamEvent;
@@ -211,33 +212,29 @@ class ConverseCustomClient extends AbstractClient
                 'has_proxy' => $this->requestOptions->hasProxy(),
             ], $this->requestOptions));
 
-            // Send streaming request using OdinSimpleCurl in coroutine environment or Guzzle otherwise
+            // 从已签名请求中提取头部（签名已固化，不能被替换或追加）
+            $signedHeaders = array_map(fn ($values) => implode(', ', $values), $signedRequest->getHeaders());
+
             if (Coroutine::id()) {
-                // In coroutine environment, use OdinSimpleCurl
-                // Extract headers from signed request
-                $headers = array_map(function ($values) {
-                    return implode(', ', $values);
-                }, $signedRequest->getHeaders());
-
-                // Prepare options for OdinSimpleCurl
-                // Use saved $bodyJson instead of reading from stream (which was consumed during signing)
-                $options = [
-                    'headers' => $headers,
-                    'body' => $bodyJson,  // Use pre-encoded and saved body for signature compatibility
-                    'connect_timeout' => $this->requestOptions->getConnectionTimeout(),
-                    'stream_chunk' => $this->requestOptions->getStreamChunkTimeout(),
-                    'header_timeout' => $this->requestOptions->getStreamFirstChunkTimeout(),
-                    'verify' => true,
-                ];
-
-                if ($proxy = $this->requestOptions->getProxy()) {
-                    $options['proxy'] = $proxy;
+                // 优先使用 Swow 原生客户端：已启用 + Swow 可用 + 无代理配置
+                // $signedHeaders 含 Accept: application/vnd.amazon.eventstream，会覆盖 buildSwowResponse 默认的 text/event-stream
+                if ($this->requestOptions->isUseSwowTransport()
+                    && SwowSSEClient::isSupported()
+                    && ! $this->requestOptions->hasProxy()
+                ) {
+                    $response = SwowSSEClient::buildSwowResponse($url, $signedHeaders, $bodyJson);
+                } else {
+                    // 降级到 OdinSimpleCurl
+                    // body 使用签名前保存的 $bodyJson，读流会破坏签名
+                    // skipContentTypeCheck=true：AWS EventStream 是二进制帧协议，不是 SSE
+                    $options = array_merge(
+                        ['headers' => $signedHeaders, 'body' => $bodyJson, 'verify' => true],
+                        $this->buildCurlStreamOptions()
+                    );
+                    $response = OdinSimpleCurl::send($url, $options, true);
                 }
-
-                // Use skipContentTypeCheck=true for AWS EventStream (not SSE format)
-                $response = OdinSimpleCurl::send($url, $options, true);
             } else {
-                // In non-coroutine environment, use Guzzle
+                // 非协程环境使用 Guzzle 发送已签名的 PSR-7 请求
                 $response = $this->client->send($signedRequest, $this->getGuzzleOptions(true));
             }
 

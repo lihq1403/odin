@@ -25,6 +25,7 @@ use Hyperf\Odin\Api\Response\EmbeddingResponse;
 use Hyperf\Odin\Api\Response\TextCompletionResponse;
 use Hyperf\Odin\Api\Transport\OdinSimpleCurl;
 use Hyperf\Odin\Api\Transport\SSEClient;
+use Hyperf\Odin\Api\Transport\SwowSSEClient;
 use Hyperf\Odin\Contract\Api\ClientInterface;
 use Hyperf\Odin\Contract\Api\ConfigInterface;
 use Hyperf\Odin\Event\AfterChatCompletionsEvent;
@@ -38,6 +39,8 @@ use Hyperf\Odin\Utils\EventUtil;
 use Hyperf\Odin\Utils\LoggingConfigHelper;
 use Hyperf\Odin\Utils\LogUtil;
 use Hyperf\Odin\Utils\TimeUtil;
+use IteratorAggregate;
+use Psr\Http\Message\ResponseInterface;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
@@ -114,41 +117,23 @@ abstract class AbstractClient implements ClientInterface
 
         $startTime = microtime(true);
         try {
-            // For streaming requests, use first chunk timeout to fail fast on network issues
             $options[RequestOptions::STREAM] = true;
             $options[RequestOptions::TIMEOUT] = $this->requestOptions->getStreamFirstChunkTimeout();
 
-            if (Coroutine::id()) {
-                foreach ($this->getHeaders() as $key => $value) {
-                    $options['headers'][$key] = $value;
-                }
-                $options['connect_timeout'] = $this->requestOptions->getConnectionTimeout();
-                $options['stream_chunk'] = $this->requestOptions->getStreamChunkTimeout();
-                $options['header_timeout'] = $this->requestOptions->getStreamFirstChunkTimeout();
-                if ($proxy = $this->requestOptions->getProxy()) {
-                    $options['proxy'] = $proxy;
-                }
-                $response = OdinSimpleCurl::send($url, $options);
-            } else {
-                $response = $this->client->post($url, $options);
-            }
+            ['response' => $response, 'duration' => $firstResponseDuration, 'transport' => $transport]
+                = $this->sendRawStreamRequest($url, $options, $startTime);
 
-            $firstResponseDuration = $this->calculateDuration($startTime);
+            $iterator = $this->buildSSEIterator($response, $transport);
 
-            $stream = $response->getBody()->detach();
-            $sseClient = new SSEClient(
-                $stream,
-                true,
-                $this->requestOptions->getTimeout(),
-                $this->logger
+            $chatCompletionStreamResponse = new ChatCompletionStreamResponse($response, $this->logger, $iterator);
+            $chatCompletionStreamResponse->setAfterChatCompletionsStreamEvent(
+                new AfterChatCompletionsStreamEvent($chatRequest, $firstResponseDuration)
             );
-
-            $chatCompletionStreamResponse = new ChatCompletionStreamResponse($response, $this->logger, $sseClient);
-            $chatCompletionStreamResponse->setAfterChatCompletionsStreamEvent(new AfterChatCompletionsStreamEvent($chatRequest, $firstResponseDuration));
 
             $this->logResponse('ChatCompletionsStreamResponse', $requestId, $firstResponseDuration, [
                 'first_response_ms' => $firstResponseDuration,
                 'response_headers' => $response->getHeaders(),
+                'transport' => $transport,
             ]);
 
             return $chatCompletionStreamResponse;
@@ -226,6 +211,100 @@ abstract class AbstractClient implements ClientInterface
     public function normalizeModelName(string $model): string
     {
         return $model;
+    }
+
+    /**
+     * 发送流式 HTTP 请求，自动选择最优传输方式（Swow / OdinSimpleCurl / Guzzle）.
+     *
+     * 传输优先级：
+     *   1. Swow 原生客户端：isUseSwowTransport() + isSupported() + 无代理 + 协程环境
+     *   2. OdinSimpleCurl：协程环境（含代理）
+     *   3. Guzzle：非协程环境
+     *
+     * @param array<string, mixed> $options Guzzle 风格请求选项（json/headers/stream/timeout 等）
+     * @return array{response: ResponseInterface, duration: float, transport: string}
+     */
+    protected function sendRawStreamRequest(string $url, array $options, float $startTime): array
+    {
+        if (Coroutine::id()) {
+            foreach ($this->getHeaders() as $key => $value) {
+                $options['headers'][$key] = $value;
+            }
+
+            // 优先使用 Swow 原生客户端：已启用 + Swow 可用 + 无代理配置
+            if ($this->requestOptions->isUseSwowTransport()
+                && SwowSSEClient::isSupported()
+                && ! $this->requestOptions->hasProxy()
+            ) {
+                $body = json_encode($options['json'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                $response = SwowSSEClient::buildSwowResponse($url, $options['headers'] ?? [], (string) $body);
+                return [
+                    'response' => $response,
+                    'duration' => $this->calculateDuration($startTime),
+                    'transport' => 'swow',
+                ];
+            }
+
+            // 降级到 OdinSimpleCurl（curl + 协程 Channel）
+            $options = array_merge($options, $this->buildCurlStreamOptions());
+            $response = OdinSimpleCurl::send($url, $options);
+        } else {
+            $response = $this->client->post($url, $options);
+        }
+
+        return [
+            'response' => $response,
+            'duration' => $this->calculateDuration($startTime),
+            'transport' => Coroutine::id() ? 'curl' : 'guzzle',
+        ];
+    }
+
+    /**
+     * 构建 OdinSimpleCurl 流式请求所需的超时和代理选项.
+     *
+     * 将 requestOptions 中的超时配置与代理配置统一打包，供 OdinSimpleCurl::send() 使用。
+     * AbstractClient::sendRawStreamRequest() 和 ConverseCustomClient 等子类均可调用。
+     *
+     * @return array{connect_timeout: float, stream_chunk: float, header_timeout: float, proxy?: string}
+     */
+    protected function buildCurlStreamOptions(): array
+    {
+        $options = [
+            'connect_timeout' => $this->requestOptions->getConnectionTimeout(),
+            'stream_chunk' => $this->requestOptions->getStreamChunkTimeout(),
+            'header_timeout' => $this->requestOptions->getStreamFirstChunkTimeout(),
+        ];
+        if ($proxy = $this->requestOptions->getProxy()) {
+            $options['proxy'] = $proxy;
+        }
+        return $options;
+    }
+
+    /**
+     * 根据传输类型把 PSR-7 响应包装为 SSE 流迭代器.
+     *
+     * - swow：使用 SwowSSEClient（基于 Psr7::readEventStream，无需 detach）
+     * - 其他：使用 SSEClient（基于 fread，需要 detach 获取原始 stream resource）
+     *
+     * @return IteratorAggregate<int, mixed>
+     */
+    protected function buildSSEIterator(ResponseInterface $response, string $transport): IteratorAggregate
+    {
+        if ($transport === 'swow') {
+            return new SwowSSEClient(
+                $response,
+                $this->requestOptions->getTimeout(),
+                $this->logger
+            );
+        }
+
+        $stream = $response->getBody()->detach();
+        return new SSEClient(
+            $stream,
+            true,
+            $this->requestOptions->getTimeout(),
+            $this->logger
+        );
     }
 
     /**

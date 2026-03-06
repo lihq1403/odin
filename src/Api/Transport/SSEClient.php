@@ -14,12 +14,11 @@ namespace Hyperf\Odin\Api\Transport;
 
 use Generator;
 use Hyperf\Odin\Exception\InvalidArgumentException;
-use IteratorAggregate;
 use JsonException;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
 
-class SSEClient implements IteratorAggregate
+class SSEClient implements SseEventProducerInterface
 {
     private const EOL = "\n";
 

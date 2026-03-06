@@ -16,6 +16,7 @@ use Generator;
 use GuzzleHttp\Psr7\Response;
 use Hyperf\Odin\Api\Transport\SSEClient;
 use Hyperf\Odin\Api\Transport\SSEEvent;
+use Hyperf\Odin\Api\Transport\SseEventProducerInterface;
 use Hyperf\Odin\Event\AfterChatCompletionsStreamEvent;
 use Hyperf\Odin\Exception\LLMException;
 use Hyperf\Odin\Message\AssistantMessage;
@@ -45,12 +46,12 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
     protected array $choices = [];
 
     /**
-     * 兼容多种类型的迭代器.
+     * 兼容多种类型的 SSE 事件迭代器（产出 SSEEvent）.
      */
-    protected ?SSEClient $sseClient = null;
+    protected ?SseEventProducerInterface $sseClient = null;
 
     /**
-     * 支持 IteratorAggregate 接口的迭代器.
+     * 支持 IteratorAggregate 接口的自定义格式迭代器（如 Gemini StreamConverter）.
      */
     protected ?IteratorAggregate $iterator = null;
 
@@ -61,12 +62,12 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
      *
      * @param null|PsrResponseInterface $response HTTP 响应对象
      * @param null|LoggerInterface $logger 日志记录器
-     * @param null|IteratorAggregate|SSEClient $streamIterator 流式迭代器，可以是 SSEClient 或 IteratorAggregate
+     * @param null|IteratorAggregate|SseEventProducerInterface $streamIterator 流式迭代器
      */
     public function __construct(?PsrResponseInterface $response = null, ?LoggerInterface $logger = null, $streamIterator = null)
     {
-        // 根据类型初始化不同的迭代器
-        if ($streamIterator instanceof SSEClient) {
+        // SseEventProducerInterface 优先：产出 SSEEvent，走 iterateWithSSEClient 路径
+        if ($streamIterator instanceof SseEventProducerInterface) {
             $this->sseClient = $streamIterator;
         } elseif ($streamIterator instanceof IteratorAggregate) {
             $this->iterator = $streamIterator;

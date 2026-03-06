@@ -13,7 +13,6 @@ declare(strict_types=1);
 namespace Hyperf\Odin\Api\Providers\Gemini;
 
 use GuzzleHttp\RequestOptions;
-use Hyperf\Engine\Coroutine;
 use Hyperf\Odin\Api\Providers\AbstractClient;
 use Hyperf\Odin\Api\Providers\Gemini\Cache\CacheInfo;
 use Hyperf\Odin\Api\Providers\Gemini\Cache\GeminiCacheManager;
@@ -21,7 +20,6 @@ use Hyperf\Odin\Api\Request\ChatCompletionRequest;
 use Hyperf\Odin\Api\RequestOptions\ApiOptions;
 use Hyperf\Odin\Api\Response\ChatCompletionResponse;
 use Hyperf\Odin\Api\Response\ChatCompletionStreamResponse;
-use Hyperf\Odin\Api\Transport\OdinSimpleCurl;
 use Hyperf\Odin\Event\AfterChatCompletionsEvent;
 use Hyperf\Odin\Event\AfterChatCompletionsStreamEvent;
 use Hyperf\Odin\Message\AssistantMessage;
@@ -131,23 +129,9 @@ class Client extends AbstractClient
 
             $this->logRequest('GeminiChatStreamRequest', $url, $options, $requestId);
 
-            // Send streaming request
-            if (Coroutine::id()) {
-                foreach ($this->getHeaders() as $key => $value) {
-                    $options['headers'][$key] = $value;
-                }
-                $options['connect_timeout'] = $this->requestOptions->getConnectionTimeout();
-                $options['stream_chunk'] = $this->requestOptions->getStreamChunkTimeout();
-                $options['header_timeout'] = $this->requestOptions->getStreamFirstChunkTimeout();
-                if ($proxy = $this->requestOptions->getProxy()) {
-                    $options['proxy'] = $proxy;
-                }
-                $response = OdinSimpleCurl::send($url, $options);
-            } else {
-                $response = $this->client->post($url, $options);
-            }
-
-            $firstResponseDuration = $this->calculateDuration($startTime);
+            // 发送流式请求，自动选择传输方式（Swow / OdinSimpleCurl / Guzzle）
+            ['response' => $response, 'duration' => $firstResponseDuration]
+                = $this->sendRawStreamRequest($url, $options, $startTime);
 
             // Calculate context hash for thought signature caching
             // This is the cumulative hash of all messages sent in the request

@@ -15,8 +15,8 @@ namespace Hyperf\Odin\Api\Providers\AwsBedrock;
 use Generator;
 use Hyperf\Odin\Api\Transport\SimpleCURLClient;
 use Hyperf\Odin\Utils\LogUtil;
-use InvalidArgumentException;
 use IteratorAggregate;
+use Psr\Http\Message\StreamInterface;
 use RuntimeException;
 use Throwable;
 
@@ -35,22 +35,12 @@ use Throwable;
  */
 class AwsEventStreamParser implements IteratorAggregate
 {
-    /**
-     * @var resource
-     */
-    private $stream;
+    private StreamInterface $stream;
 
     private string $buffer = '';
 
-    /**
-     * @param resource $stream PHP stream resource
-     */
-    public function __construct($stream)
+    public function __construct(StreamInterface $stream)
     {
-        if (! is_resource($stream)) {
-            throw new InvalidArgumentException('Stream must be a resource');
-        }
-
         $this->stream = $stream;
     }
 
@@ -61,17 +51,17 @@ class AwsEventStreamParser implements IteratorAggregate
     {
         $messageCount = 0;
         $this->log('开始解析EventStream', [
-            'feof' => feof($this->stream),
+            'eof' => $this->stream->eof(),
         ]);
 
         try {
-            while (! feof($this->stream)) {
+            while (! $this->stream->eof()) {
                 $length = $this->readExactly(4);
                 if ($length === null) {
                     // Normal EOF
                     $this->log('流正常结束', [
                         'total_messages' => $messageCount,
-                        'feof' => feof($this->stream),
+                        'eof' => $this->stream->eof(),
                     ]);
                     break;
                 }
@@ -100,7 +90,7 @@ class AwsEventStreamParser implements IteratorAggregate
         } finally {
             $this->log('EventStream解析完成', [
                 'total_messages' => $messageCount,
-                'feof' => feof($this->stream),
+                'eof' => $this->stream->eof(),
                 'remaining_buffer' => strlen($this->buffer),
             ]);
 
@@ -122,16 +112,16 @@ class AwsEventStreamParser implements IteratorAggregate
         $maxAttempts = 100;
         $attempt = 0;
 
-        while ($remaining > 0 && ! feof($this->stream)) {
-            $chunk = fread($this->stream, $remaining);
-
-            if ($chunk === false) {
-                $this->log('fread返回false', [
+        while ($remaining > 0 && ! $this->stream->eof()) {
+            try {
+                $chunk = $this->stream->read($remaining);
+            } catch (RuntimeException $e) {
+                $this->log('stream->read 抛出异常', [
                     'remaining' => $remaining,
                     'data_read_so_far' => strlen($data),
-                    'data_preview' => substr($data, 0, 200),
+                    'error' => $e->getMessage(),
                 ]);
-                throw new RuntimeException('Failed to read from stream');
+                throw new RuntimeException('Failed to read from stream: ' . $e->getMessage(), 0, $e);
             }
 
             if ($chunk === '') {
@@ -372,11 +362,10 @@ class AwsEventStreamParser implements IteratorAggregate
     private function logLastReadChunks(): void
     {
         try {
-            // Get stream metadata which includes wrapper_data
-            $metadata = stream_get_meta_data($this->stream);
-            $wrapper = $metadata['wrapper_data'] ?? null;
+            // 通过 PSR-7 getMetadata 获取底层 wrapper_data（仅 OdinSimpleCurl 路径有效）
+            $wrapper = $this->stream->getMetadata('wrapper_data');
 
-            // Check if it's a SimpleCURLClient instance
+            // 非 SimpleCURLClient 流（如 Swow、Guzzle）无此元数据，直接跳过
             if (! $wrapper instanceof SimpleCURLClient) {
                 return;
             }

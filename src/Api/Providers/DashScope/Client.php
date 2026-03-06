@@ -13,15 +13,12 @@ declare(strict_types=1);
 namespace Hyperf\Odin\Api\Providers\DashScope;
 
 use GuzzleHttp\RequestOptions;
-use Hyperf\Engine\Coroutine;
 use Hyperf\Odin\Api\Providers\AbstractClient;
 use Hyperf\Odin\Api\Providers\DashScope\Cache\DashScopeCachePointManager;
 use Hyperf\Odin\Api\Request\ChatCompletionRequest;
 use Hyperf\Odin\Api\RequestOptions\ApiOptions;
 use Hyperf\Odin\Api\Response\ChatCompletionResponse;
 use Hyperf\Odin\Api\Response\ChatCompletionStreamResponse;
-use Hyperf\Odin\Api\Transport\OdinSimpleCurl;
-use Hyperf\Odin\Api\Transport\SSEClient;
 use Hyperf\Odin\Event\AfterChatCompletionsEvent;
 use Hyperf\Odin\Event\AfterChatCompletionsStreamEvent;
 use Hyperf\Odin\Utils\EventUtil;
@@ -116,30 +113,12 @@ class Client extends AbstractClient
             $options[RequestOptions::STREAM] = true;
             $options[RequestOptions::TIMEOUT] = $this->requestOptions->getStreamFirstChunkTimeout();
 
-            if (Coroutine::id()) {
-                foreach ($this->getHeaders() as $key => $value) {
-                    $options['headers'][$key] = $value;
-                }
-                $options['connect_timeout'] = $this->requestOptions->getConnectionTimeout();
-                $options['stream_chunk'] = $this->requestOptions->getStreamChunkTimeout();
-                $options['header_timeout'] = $this->requestOptions->getStreamFirstChunkTimeout();
-                $response = OdinSimpleCurl::send($url, $options);
-            } else {
-                $response = $this->client->post($url, $options);
-            }
+            ['response' => $response, 'duration' => $firstResponseDuration, 'transport' => $transport]
+                = $this->sendRawStreamRequest($url, $options, $startTime);
 
-            $firstResponseDuration = $this->calculateDuration($startTime);
+            $iterator = $this->buildSSEIterator($response, $transport);
 
-            $stream = $response->getBody()->detach();
-            $sseClient = new SSEClient(
-                $stream,
-                true,
-                $this->requestOptions->getTimeout(),
-                $this->logger
-            );
-
-            // 对于流式响应，ResponseHandler的转换会在SSE事件中处理
-            $chatCompletionStreamResponse = new ChatCompletionStreamResponse($response, $this->logger, $sseClient);
+            $chatCompletionStreamResponse = new ChatCompletionStreamResponse($response, $this->logger, $iterator);
             $chatCompletionStreamResponse->setAfterChatCompletionsStreamEvent(
                 new AfterChatCompletionsStreamEvent($chatRequest, $firstResponseDuration)
             );
@@ -147,6 +126,7 @@ class Client extends AbstractClient
             $this->logResponse('DashScopeChatStreamResponse', $requestId, $firstResponseDuration, [
                 'first_response_ms' => $firstResponseDuration,
                 'response_headers' => $response->getHeaders(),
+                'transport' => $transport,
             ]);
 
             return $chatCompletionStreamResponse;
