@@ -230,7 +230,7 @@ class ApiOptions
      */
     public function hasProxy(): bool
     {
-        return $this->proxy !== null;
+        return ! empty($this->proxy);
     }
 
     /**
