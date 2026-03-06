@@ -294,7 +294,14 @@ class RequestHandler
 
         // Add tool calls as functionCall parts
         if ($message->hasToolCalls()) {
-            foreach ($message->getToolCalls() as $toolCall) {
+            $toolCalls = $message->getToolCalls();
+
+            // 以 assistant 消息整体为单位查询缓存（同一思考轮次的所有 tool call 共享同一签名）
+            $toolCallIds = array_map(fn ($tc) => $tc->getId(), $toolCalls);
+            $assistantKey = ThoughtSignatureCache::generateAssistantKey($toolCallIds);
+            $cachedThoughtSignature = ThoughtSignatureCache::get($assistantKey);
+
+            foreach ($toolCalls as $toolCall) {
                 $arguments = $toolCall->getArguments();
 
                 // Build functionCall part
@@ -314,11 +321,13 @@ class RequestHandler
                 ];
 
                 // Get thought_signature if available (only for Gemini 3 and 2.5 models with thinking mode)
-                // Priority: ToolCall object -> Cache
+                // Priority: ToolCall object -> assistant-level cache (applies to all tool calls in the turn)
                 $thoughtSignature = $toolCall->getThoughtSignature();
                 if (! $thoughtSignature) {
-                    $thoughtSignature = ThoughtSignatureCache::get($toolCall->getId());
-                    $toolCall->setThoughtSignature($thoughtSignature);
+                    $thoughtSignature = $cachedThoughtSignature;
+                    if ($thoughtSignature) {
+                        $toolCall->setThoughtSignature($thoughtSignature);
+                    }
                 }
 
                 if ($thoughtSignature) {

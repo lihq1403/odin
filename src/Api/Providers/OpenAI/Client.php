@@ -13,7 +13,12 @@ declare(strict_types=1);
 namespace Hyperf\Odin\Api\Providers\OpenAI;
 
 use Hyperf\Odin\Api\Providers\AbstractClient;
+use Hyperf\Odin\Api\Request\ChatCompletionRequest;
 use Hyperf\Odin\Api\RequestOptions\ApiOptions;
+use Hyperf\Odin\Api\Response\ChatCompletionResponse;
+use Hyperf\Odin\Api\Response\ChatCompletionStreamResponse;
+use Hyperf\Odin\Event\AfterChatCompletionsStreamEvent;
+use Hyperf\Odin\Message\AssistantMessage;
 use Psr\Log\LoggerInterface;
 
 class Client extends AbstractClient
@@ -24,6 +29,34 @@ class Client extends AbstractClient
             $requestOptions = new ApiOptions();
         }
         parent::__construct($config, $requestOptions, $logger);
+    }
+
+    /**
+     * Chat completions with reasoning_details support.
+     */
+    public function chatCompletions(ChatCompletionRequest $chatRequest): ChatCompletionResponse
+    {
+        $this->restoreReasoningDetailsFromCache($chatRequest);
+        $response = parent::chatCompletions($chatRequest);
+        $this->cacheReasoningDetailsFromResponse($response);
+        return $response;
+    }
+
+    /**
+     * Chat completions stream with reasoning_details support.
+     */
+    public function chatCompletionsStream(ChatCompletionRequest $chatRequest): ChatCompletionStreamResponse
+    {
+        $this->restoreReasoningDetailsFromCache($chatRequest);
+        $response = parent::chatCompletionsStream($chatRequest);
+
+        /** @var AfterChatCompletionsStreamEvent $event */
+        $event = $response->getAfterChatCompletionsStreamEvent();
+        $event?->addCallback(function ($event) {
+            $this->cacheReasoningDetailsFromResponse($event->completionResponse);
+        });
+
+        return $response;
     }
 
     /**
@@ -68,5 +101,51 @@ class Client extends AbstractClient
         }
 
         return $headers;
+    }
+
+    /**
+     * 发请求前：为缺少 reasoning_details 的 AssistantMessage（含工具调用）从缓存恢复签名数据.
+     * 以该 assistant 消息中所有 tool_call_id 的组合作为 key，一次 assistant 消息只查一次缓存.
+     */
+    private function restoreReasoningDetailsFromCache(ChatCompletionRequest $chatRequest): void
+    {
+        foreach ($chatRequest->getMessages() as $message) {
+            if (! $message instanceof AssistantMessage
+                || ! $message->hasToolCalls()
+                || $message->hasReasoningDetails()) {
+                continue;
+            }
+            $toolCallIds = array_map(fn ($tc) => $tc->getId(), $message->getToolCalls());
+            $assistantKey = ReasoningDetailsCache::generateAssistantKey($toolCallIds);
+            $cached = ReasoningDetailsCache::get($assistantKey);
+            if ($cached !== null) {
+                $message->setReasoningDetails($cached);
+            }
+        }
+    }
+
+    /**
+     * 收到响应后：将含工具调用的响应中的 reasoning_details 缓存，供下一轮请求恢复使用.
+     * 以该 assistant 消息中所有 tool_call_id 的组合作为 key，只存一份.
+     */
+    private function cacheReasoningDetailsFromResponse(ChatCompletionResponse $response): void
+    {
+        $choice = $response->getFirstChoice();
+        if ($choice === null) {
+            return;
+        }
+        $message = $choice->getMessage();
+        if (! $message instanceof AssistantMessage
+            || ! $message->hasToolCalls()
+            || ! $message->hasReasoningDetails()) {
+            return;
+        }
+        $reasoningDetails = $message->getReasoningDetails();
+        if ($reasoningDetails === null) {
+            return;
+        }
+        $toolCallIds = array_map(fn ($tc) => $tc->getId(), $message->getToolCalls());
+        $assistantKey = ReasoningDetailsCache::generateAssistantKey($toolCallIds);
+        ReasoningDetailsCache::store($assistantKey, $reasoningDetails);
     }
 }

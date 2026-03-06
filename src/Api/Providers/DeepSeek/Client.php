@@ -116,11 +116,8 @@ class Client extends AbstractClient
     }
 
     /**
-     * Restore reasoning_content from cache for assistant messages that have tool calls.
-     *
-     * When continuing a tool calling sequence, the assistant messages may not have
-     * reasoning_content set (e.g., when messages are constructed from external sources).
-     * This method restores the cached reasoning_content based on tool_call_id.
+     * 发请求前：为缺少 reasoning_content 的 AssistantMessage（含工具调用）从缓存恢复思考内容.
+     * 以该 assistant 消息中所有 tool_call_id 的组合作为 key，一次 assistant 消息只查一次缓存.
      */
     private function restoreReasoningContentFromCache(ChatCompletionRequest $chatRequest): void
     {
@@ -130,28 +127,23 @@ class Client extends AbstractClient
         }
 
         foreach ($messages as $message) {
-            // Only process assistant messages with tool calls but without reasoning_content
-            if ($message instanceof AssistantMessage
-                && $message->hasToolCalls()
-                && ! $message->hasReasoningContent()) {
-                // Try to restore reasoning_content from cache using tool_call_id
-                foreach ($message->getToolCalls() as $toolCall) {
-                    $cachedReasoningContent = ReasoningContentCache::get($toolCall->getId());
-                    if ($cachedReasoningContent !== null) {
-                        $message->setReasoningContent($cachedReasoningContent);
-                        break; // Only need to restore once per assistant message
-                    }
-                }
+            if (! $message instanceof AssistantMessage
+                || ! $message->hasToolCalls()
+                || $message->hasReasoningContent()) {
+                continue;
+            }
+            $toolCallIds = array_map(fn ($tc) => $tc->getId(), $message->getToolCalls());
+            $assistantKey = ReasoningContentCache::generateAssistantKey($toolCallIds);
+            $cached = ReasoningContentCache::get($assistantKey);
+            if ($cached !== null) {
+                $message->setReasoningContent($cached);
             }
         }
     }
 
     /**
-     * Cache reasoning_content from response.
-     *
-     * When the response contains tool calls with reasoning_content,
-     * cache the reasoning_content using tool_call_id as the key.
-     * This allows restoring reasoning_content in subsequent requests.
+     * 收到响应后：将含工具调用的响应中的 reasoning_content 缓存，供下一轮请求恢复使用.
+     * 以该 assistant 消息中所有 tool_call_id 的组合作为 key，只存一份.
      */
     private function cacheReasoningContentFromResponse(ChatCompletionResponse $response): void
     {
@@ -161,12 +153,9 @@ class Client extends AbstractClient
         }
 
         $message = $choice->getMessage();
-        if (! $message instanceof AssistantMessage) {
-            return;
-        }
-
-        // Only cache if there's reasoning_content and tool calls
-        if (! $message->hasReasoningContent() || ! $message->hasToolCalls()) {
+        if (! $message instanceof AssistantMessage
+            || ! $message->hasReasoningContent()
+            || ! $message->hasToolCalls()) {
             return;
         }
 
@@ -175,10 +164,8 @@ class Client extends AbstractClient
             return;
         }
 
-        // Cache reasoning_content for each tool call
-        foreach ($message->getToolCalls() as $toolCall) {
-            ReasoningContentCache::store($toolCall->getId(), $reasoningContent);
-            break; // Only need to cache once per assistant message
-        }
+        $toolCallIds = array_map(fn ($tc) => $tc->getId(), $message->getToolCalls());
+        $assistantKey = ReasoningContentCache::generateAssistantKey($toolCallIds);
+        ReasoningContentCache::store($assistantKey, $reasoningContent);
     }
 }

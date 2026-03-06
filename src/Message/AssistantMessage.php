@@ -41,6 +41,14 @@ class AssistantMessage extends AbstractMessage
     protected ?string $reasoningContent = null;
 
     /**
+     * reasoning_details 原始数组（Gemini OpenAI 兼容格式）.
+     * 存储 API 返回的 reasoning_details，多轮请求时原样回传以保留推理上下文.
+     *
+     * @var null|array<array{type: string, text?: string, signature?: string}>
+     */
+    protected ?array $reasoningDetails = null;
+
+    /**
      * content 的 array 格式（OpenAI API）
      * 当非 null 时，toArray 输出 array 格式；getContent 从其中提取文本.
      *
@@ -73,6 +81,9 @@ class AssistantMessage extends AbstractMessage
         $content = $message['content'] ?? '';
         $toolCalls = ToolCall::fromArray($message['tool_calls'] ?? []);
         $reasoningContent = $message['reasoning_content'] ?? null;
+        $reasoningDetails = isset($message['reasoning_details']) && is_array($message['reasoning_details'])
+            ? $message['reasoning_details']
+            : null;
 
         $contentParts = null;
         if (is_array($content) && ! empty($content)) {
@@ -83,6 +94,7 @@ class AssistantMessage extends AbstractMessage
         }
 
         $instance = new self($contentString, $toolCalls, $reasoningContent);
+        $instance->reasoningDetails = $reasoningDetails;
         if ($contentParts !== null) {
             $instance->contentParts = $contentParts;
         }
@@ -108,6 +120,10 @@ class AssistantMessage extends AbstractMessage
         if (! is_null($this->reasoningContent)) {
             $result['reasoning_content'] = $this->reasoningContent;
         }
+        // 多轮时原样回传 reasoning_details，保留 Gemini 推理上下文签名
+        if (! is_null($this->reasoningDetails)) {
+            $result['reasoning_details'] = $this->reasoningDetails;
+        }
         if (! empty($toolCalls)) {
             $result['tool_calls'] = $toolCalls;
         }
@@ -127,6 +143,9 @@ class AssistantMessage extends AbstractMessage
         ];
         if (! is_null($this->reasoningContent)) {
             $result['reasoning_content'] = $this->reasoningContent;
+        }
+        if (! is_null($this->reasoningDetails)) {
+            $result['reasoning_details'] = $this->reasoningDetails;
         }
         if (! empty($toolCalls)) {
             $result['tool_calls'] = $toolCalls;
@@ -215,6 +234,35 @@ class AssistantMessage extends AbstractMessage
     {
         $this->reasoningContent = $reasoningContent;
         return $this;
+    }
+
+    /**
+     * 获取 reasoning_details 原始数组.
+     *
+     * @return null|array<array{type: string, text?: string, signature?: string}>
+     */
+    public function getReasoningDetails(): ?array
+    {
+        return $this->reasoningDetails;
+    }
+
+    /**
+     * 设置 reasoning_details 原始数组.
+     *
+     * @param null|array<array{type: string, text?: string, signature?: string}> $reasoningDetails
+     */
+    public function setReasoningDetails(?array $reasoningDetails): self
+    {
+        $this->reasoningDetails = $reasoningDetails;
+        return $this;
+    }
+
+    /**
+     * 是否存在 reasoning_details（用于多轮请求时判断是否需要回传签名）.
+     */
+    public function hasReasoningDetails(): bool
+    {
+        return ! empty($this->reasoningDetails);
     }
 
     /**

@@ -466,11 +466,22 @@ class Client extends AbstractClient
             return;
         }
 
+        // 收集所有 tool_call_id，找出第一个有 thought_signature 的值（同一思考轮次共享同一签名）
+        $toolCallIds = [];
+        $thoughtSignature = null;
         foreach ($toolCalls as $toolCall) {
-            $thoughtSignature = $toolCall->getMetadata('thought_signature');
-            if ($thoughtSignature !== null) {
-                ThoughtSignatureCache::store($toolCall->getId(), $thoughtSignature);
+            $toolCallIds[] = $toolCall->getId();
+            if ($thoughtSignature === null) {
+                $sig = $toolCall->getMetadata('thought_signature');
+                if ($sig !== null) {
+                    $thoughtSignature = $sig;
+                }
             }
+        }
+
+        if ($thoughtSignature !== null) {
+            $assistantKey = ThoughtSignatureCache::generateAssistantKey($toolCallIds);
+            ThoughtSignatureCache::store($assistantKey, $thoughtSignature);
         }
     }
 }

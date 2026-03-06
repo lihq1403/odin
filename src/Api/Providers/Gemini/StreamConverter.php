@@ -680,12 +680,25 @@ class StreamConverter implements IteratorAggregate
      */
     private function cacheThoughtSignatures(): void
     {
-        // Cache tool call thought signatures
+        // 按 candidate 维度收集所有 tool_call_id，找出首个 thought_signature，
+        // 以 assistant 消息整体为单位存储一份（同一思考轮次内所有 tool call 共享同一签名）
         foreach ($this->toolCallTracker as $candidateIndex => $toolCalls) {
-            foreach ($toolCalls as $toolCallIndex => $toolCall) {
+            $toolCallIds = array_column($toolCalls, 'id');
+            if (empty($toolCallIds)) {
+                continue;
+            }
+
+            $thoughtSignature = null;
+            foreach ($toolCalls as $toolCall) {
                 if (isset($toolCall['thought_signature'])) {
-                    ThoughtSignatureCache::store($toolCall['id'], $toolCall['thought_signature']);
+                    $thoughtSignature = $toolCall['thought_signature'];
+                    break;
                 }
+            }
+
+            if ($thoughtSignature !== null) {
+                $assistantKey = ThoughtSignatureCache::generateAssistantKey($toolCallIds);
+                ThoughtSignatureCache::store($assistantKey, $thoughtSignature);
             }
         }
 

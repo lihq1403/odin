@@ -633,6 +633,7 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
                         'role' => 'assistant',
                         'content' => '',
                         'reasoning_content' => null,
+                        'reasoning_details' => null,
                         'tool_calls' => [],
                     ],
                     'logprobs' => $choice->getLogprobs(),
@@ -648,7 +649,7 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
                 $mergedChoices[$index]['message']['content'] .= $content;
             }
 
-            // Handle reasoning content for AssistantMessage
+            // Handle reasoning content and reasoning_details for AssistantMessage
             if ($message instanceof AssistantMessage) {
                 $reasoningContent = $message->getReasoningContent();
                 if (! empty($reasoningContent)) {
@@ -656,6 +657,12 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
                         $mergedChoices[$index]['message']['reasoning_content'] = '';
                     }
                     $mergedChoices[$index]['message']['reasoning_content'] .= $reasoningContent;
+                }
+
+                // reasoning_details 整体下发（含签名），取最后一个非空值
+                $reasoningDetails = $message->getReasoningDetails();
+                if ($reasoningDetails !== null) {
+                    $mergedChoices[$index]['message']['reasoning_details'] = $reasoningDetails;
                 }
 
                 // Merge tool calls
@@ -667,23 +674,10 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
                         $streamArgs = $toolCall->getStreamArguments();
                         $existingToolCallFound = false;
 
-                        // 优先按 stream_index 匹配（并行工具调用续传帧无 id，需用 index 定位）
-                        if ($streamIndex !== null) {
-                            foreach ($mergedChoices[$index]['message']['tool_calls'] as &$existingToolCall) {
-                                if (($existingToolCall['stream_index'] ?? null) === $streamIndex) {
-                                    $existingToolCall['function']['arguments'] = ($existingToolCall['function']['arguments'] ?? '') . $streamArgs;
-                                    // 初始帧可能没有 id，续传时补充
-                                    if (empty($existingToolCall['id']) && $toolCallId !== '') {
-                                        $existingToolCall['id'] = $toolCallId;
-                                    }
-                                    $existingToolCallFound = true;
-                                    break;
-                                }
-                            }
-                        }
-
-                        // 降级：按 id 匹配（兼容单工具调用场景）
-                        if (! $existingToolCallFound && $toolCallId !== '') {
+                        if ($toolCallId !== '') {
+                            // id 存在时严格按 id 匹配。
+                            // Gemini 等模型每个 tool call chunk 都携带完整 id，但所有 chunk 共用 index: 0，
+                            // 若优先按 stream_index 匹配会将不同 tool call 的 arguments 错误地追加到同一条目。
                             foreach ($mergedChoices[$index]['message']['tool_calls'] as &$existingToolCall) {
                                 if ($existingToolCall['id'] === $toolCallId) {
                                     $existingToolCall['function']['arguments'] = ($existingToolCall['function']['arguments'] ?? '') . $streamArgs;
@@ -691,6 +685,18 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
                                     break;
                                 }
                             }
+                            unset($existingToolCall);
+                        } elseif ($streamIndex !== null) {
+                            // id 为空时才使用 stream_index 匹配（标准 OpenAI 流式 argument fragment 帧，
+                            // 续传帧不携带 id，只能通过 index 定位对应条目）。
+                            foreach ($mergedChoices[$index]['message']['tool_calls'] as &$existingToolCall) {
+                                if (($existingToolCall['stream_index'] ?? null) === $streamIndex) {
+                                    $existingToolCall['function']['arguments'] = ($existingToolCall['function']['arguments'] ?? '') . $streamArgs;
+                                    $existingToolCallFound = true;
+                                    break;
+                                }
+                            }
+                            unset($existingToolCall);
                         }
 
                         // 新工具调用条目（初始帧）
@@ -715,10 +721,13 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
             }
         }
 
-        // Clean up empty reasoning_content and internal tracking fields
+        // Clean up empty fields and internal tracking fields
         foreach ($mergedChoices as &$choice) {
             if (empty($choice['message']['reasoning_content'])) {
                 $choice['message']['reasoning_content'] = null;
+            }
+            if (empty($choice['message']['reasoning_details'])) {
+                unset($choice['message']['reasoning_details']);
             }
             if (empty($choice['message']['tool_calls'])) {
                 unset($choice['message']['tool_calls']);

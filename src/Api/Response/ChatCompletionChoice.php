@@ -28,12 +28,17 @@ class ChatCompletionChoice
     {
         $message = $choice['message'] ?? [];
         if (isset($choice['delta'])) {
+            $delta = $choice['delta'];
             $message = [
-                'role' => $choice['delta']['role'] ?? 'assistant',
-                'content' => $choice['delta']['content'] ?? '',
-                'reasoning_content' => $choice['delta']['reasoning_content'] ?? null,
-                'tool_calls' => $choice['delta']['tool_calls'] ?? [],
+                'role' => $delta['role'] ?? 'assistant',
+                'content' => $delta['content'] ?? '',
+                'reasoning_content' => $delta['reasoning_content'] ?? null,
+                'tool_calls' => $delta['tool_calls'] ?? [],
             ];
+            // 透传 reasoning_details（Gemini OpenAI 兼容格式），用于多轮时回传签名
+            if (isset($delta['reasoning_details']) && is_array($delta['reasoning_details'])) {
+                $message['reasoning_details'] = $delta['reasoning_details'];
+            }
         }
 
         return new self(MessageUtil::createFromArray($message), $choice['index'] ?? null, $choice['logprobs'] ?? null, $choice['finish_reason'] ?? null);
