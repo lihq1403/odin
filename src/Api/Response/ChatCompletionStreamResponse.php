@@ -663,30 +663,45 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
                 if (! empty($toolCalls)) {
                     foreach ($toolCalls as $toolCall) {
                         $toolCallId = $toolCall->getId();
+                        $streamIndex = $toolCall->getMetadata('stream_index');
+                        $streamArgs = $toolCall->getStreamArguments();
                         $existingToolCallFound = false;
 
-                        // Check if this tool call already exists and merge stream arguments
-                        foreach ($mergedChoices[$index]['message']['tool_calls'] as &$existingToolCall) {
-                            if ($existingToolCall['id'] === $toolCallId) {
-                                // Append stream arguments for existing tool call
-                                if (isset($existingToolCall['function']['arguments'])) {
-                                    $existingToolCall['function']['arguments'] .= $toolCall->getStreamArguments();
-                                } else {
-                                    $existingToolCall['function']['arguments'] = $toolCall->getStreamArguments();
+                        // 优先按 stream_index 匹配（并行工具调用续传帧无 id，需用 index 定位）
+                        if ($streamIndex !== null) {
+                            foreach ($mergedChoices[$index]['message']['tool_calls'] as &$existingToolCall) {
+                                if (($existingToolCall['stream_index'] ?? null) === $streamIndex) {
+                                    $existingToolCall['function']['arguments'] = ($existingToolCall['function']['arguments'] ?? '') . $streamArgs;
+                                    // 初始帧可能没有 id，续传时补充
+                                    if (empty($existingToolCall['id']) && $toolCallId !== '') {
+                                        $existingToolCall['id'] = $toolCallId;
+                                    }
+                                    $existingToolCallFound = true;
+                                    break;
                                 }
-                                $existingToolCallFound = true;
-                                break;
                             }
                         }
 
-                        // Add new tool call if not found
+                        // 降级：按 id 匹配（兼容单工具调用场景）
+                        if (! $existingToolCallFound && $toolCallId !== '') {
+                            foreach ($mergedChoices[$index]['message']['tool_calls'] as &$existingToolCall) {
+                                if ($existingToolCall['id'] === $toolCallId) {
+                                    $existingToolCall['function']['arguments'] = ($existingToolCall['function']['arguments'] ?? '') . $streamArgs;
+                                    $existingToolCallFound = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        // 新工具调用条目（初始帧）
                         if (! $existingToolCallFound) {
                             $mergedChoices[$index]['message']['tool_calls'][] = [
-                                'id' => $toolCall->getId(),
+                                'id' => $toolCallId,
                                 'type' => $toolCall->getType(),
+                                'stream_index' => $streamIndex,
                                 'function' => [
                                     'name' => $toolCall->getName(),
-                                    'arguments' => $toolCall->getStreamArguments() ?: json_encode($toolCall->getArguments()),
+                                    'arguments' => $streamArgs !== '' ? $streamArgs : json_encode($toolCall->getArguments()),
                                 ],
                             ];
                         }
@@ -700,13 +715,18 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
             }
         }
 
-        // Clean up empty reasoning_content
+        // Clean up empty reasoning_content and internal tracking fields
         foreach ($mergedChoices as &$choice) {
             if (empty($choice['message']['reasoning_content'])) {
                 $choice['message']['reasoning_content'] = null;
             }
             if (empty($choice['message']['tool_calls'])) {
                 unset($choice['message']['tool_calls']);
+            } else {
+                // 移除内部使用的 stream_index 字段，不暴露到最终响应
+                foreach ($choice['message']['tool_calls'] as &$tc) {
+                    unset($tc['stream_index']);
+                }
             }
         }
 

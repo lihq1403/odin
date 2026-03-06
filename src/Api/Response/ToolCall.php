@@ -34,13 +34,17 @@ class ToolCall implements Arrayable
         $toolCallsResult = [];
         foreach ($toolCalls as $toolCall) {
             if (! isset($toolCall['function'])) {
-                return [];
+                // 跳过缺少 function 的单条记录，不中断整个解析
+                continue;
             }
             $function = $toolCall['function'];
+            // 流式 chunk 中初始帧可能只包含 name 和 id，arguments 尚未下发
             if (isset($function['arguments'])) {
-                $arguments = json_decode($function['arguments'], true);
+                $streamArguments = $function['arguments'];
+                $arguments = json_decode($streamArguments, true);
             } else {
-                return [];
+                $streamArguments = '';
+                $arguments = [];
             }
             if (! is_array($arguments)) {
                 $arguments = [];
@@ -48,7 +52,12 @@ class ToolCall implements Arrayable
             $name = $function['name'] ?? '';
             $id = $toolCall['id'] ?? '';
             $type = $toolCall['type'] ?? 'function';
-            $instance = new self($name, $arguments, $id, $type, $function['arguments']);
+            $instance = new self($name, $arguments, $id, $type, $streamArguments);
+
+            // 保存流式 index，用于并行工具调用时的参数追加定位
+            if (isset($toolCall['index'])) {
+                $instance->setMetadata('stream_index', (int) $toolCall['index']);
+            }
 
             // Preserve thought signature if present (Gemini-specific)
             if (isset($toolCall['thought_signature'])) {

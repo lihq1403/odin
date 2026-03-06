@@ -108,6 +108,8 @@ class ToolUseAgent
 
             $toolCalls = [];
             $toolCallIds = [];
+            // 按流式 index 映射 $toolCalls 中的偏移量，用于并行工具调用时精准追加 arguments
+            $toolCallIndexMap = [];
             $content = '';
             $lastChoice = null;
             /** @var ChatCompletionChoice $choice */
@@ -118,12 +120,31 @@ class ToolUseAgent
                 if ($message instanceof AssistantMessage && $message->hasToolCalls()) {
                     foreach ($message->getToolCalls() as $toolCall) {
                         if ($toolCall->getId() && ! in_array($toolCall->getId(), $toolCallIds)) {
+                            // 新工具调用的初始帧（含 id 和 name）
                             $toolCallIds[] = $toolCall->getId();
+                            $position = count($toolCalls);
                             $toolCalls[] = new ToolCall($toolCall->getName(), [], $toolCall->getId(), $toolCall->getType(), $toolCall->getStreamArguments());
+                            $streamIndex = $toolCall->getMetadata('stream_index');
+                            if ($streamIndex !== null) {
+                                $toolCallIndexMap[$streamIndex] = $position;
+                            }
                         } else {
-                            /** @var ToolCall $lastToolCall */
-                            $lastToolCall = end($toolCalls);
-                            $lastToolCall->appendStreamArguments($toolCall->getStreamArguments());
+                            // 续传帧（只含 arguments 片段，无 id）
+                            $arguments = $toolCall->getStreamArguments();
+                            if ($arguments === '') {
+                                continue;
+                            }
+                            $streamIndex = $toolCall->getMetadata('stream_index');
+                            if ($streamIndex !== null && isset($toolCallIndexMap[$streamIndex])) {
+                                // 通过 stream_index 精准定位对应工具调用
+                                $toolCalls[$toolCallIndexMap[$streamIndex]]->appendStreamArguments($arguments);
+                            } elseif (! empty($toolCalls)) {
+                                // 降级：追加到最后一个工具调用
+                                $lastToolCall = end($toolCalls);
+                                if ($lastToolCall !== false) {
+                                    $lastToolCall->appendStreamArguments($arguments);
+                                }
+                            }
                         }
                     }
                     // 如果是工具，持续获取内容，直到工具内容完整

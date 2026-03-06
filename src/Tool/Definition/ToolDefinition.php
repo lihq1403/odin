@@ -16,6 +16,7 @@ use Closure;
 use Hyperf\Contract\Arrayable;
 use Hyperf\Odin\Tool\Definition\Schema\JsonSchemaValidator;
 use InvalidArgumentException;
+use stdClass;
 
 /**
  * 工具定义类，用于定义符合 JSON Schema 标准的工具.
@@ -95,6 +96,10 @@ class ToolDefinition implements Arrayable
             'function' => [
                 'name' => $this->getName(),
                 'description' => $this->getDescription(),
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => new stdClass(),
+                ],
             ],
         ];
 
