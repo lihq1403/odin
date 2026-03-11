@@ -89,6 +89,11 @@ class ConversationCacheStrategy implements CacheStrategyInterface
             return $this->createInitialCache($config, $request, $cacheKey);
         }
 
+        // 向 Gemini API 验证缓存是否真实存活，若已失效则清除本地记录并重新创建
+        if (! $this->validateRemoteCache($cachedData->getCacheName(), $cacheKey)) {
+            return $this->createInitialCache($config, $request, $cacheKey);
+        }
+
         // Check if you should update cache
         if ($this->shouldUpdateCache($config, $cachedData, $request)) {
             return $this->updateCache($config, $cachedData, $request, $cacheKey);
@@ -476,6 +481,25 @@ class ConversationCacheStrategy implements CacheStrategyInterface
                 'cache_name' => $oldCacheName,
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * 验证 Gemini API 侧的缓存是否真实存活.
+     * 若缓存已失效（API 报错），则清除本地缓存记录，返回 false.
+     */
+    private function validateRemoteCache(string $cacheName, string $cacheKey): bool
+    {
+        try {
+            $this->cacheClient->getCache($cacheName);
+            return true;
+        } catch (Throwable $e) {
+            $this->logger?->warning('Remote cache validation failed, clearing local cache', [
+                'cache_name' => $cacheName,
+                'error' => $e->getMessage(),
+            ]);
+            $this->cache->delete($cacheKey);
+            return false;
         }
     }
 }
