@@ -479,9 +479,11 @@ class StreamConverter implements IteratorAggregate
      */
     private function findOrCreateToolCall(int $candidateIndex, string $functionName): int
     {
-        // Find existing tool call by name
+        // 已处理过（chunk_count > 0）的同名条目视为已完成的独立调用，不复用。
+        // Gemini 并行 tool call 时会在不同 SSE 块中分别下发同名函数，
+        // 必须为每个块创建独立条目，否则 arguments 会被拼接成无效 JSON。
         foreach ($this->toolCallTracker[$candidateIndex] as $idx => $tracked) {
-            if ($tracked['name'] === $functionName) {
+            if ($tracked['name'] === $functionName && $tracked['chunk_count'] === 0) {
                 return $idx;
             }
         }
