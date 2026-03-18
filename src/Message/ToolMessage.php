@@ -152,6 +152,18 @@ class ToolMessage extends AbstractMessage
     public static function fromArray(array $message): self
     {
         $content = $message['content'] ?? '';
+        if (is_array($content)) {
+            $text = '';
+            foreach ($content as $item) {
+                if (isset($item['text'])) {
+                    $text .= $item['text'];
+                }
+            }
+            $content = $text;
+        }
+        if (is_array($content)) {
+            $content = json_encode($content, JSON_UNESCAPED_UNICODE);
+        }
         $toolCallId = $message['tool_call_id'] ?? '';
         $name = $message['name'] ?? null;
         $arguments = $message['arguments'] ?? null;
