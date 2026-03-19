@@ -27,6 +27,15 @@ class OdinSimpleCurl
     {
         $options['url'] = $url;
 
+        // 在传入 stream URL 之前，将 json 字段提前序列化为 body 字符串。
+        // 若直接传 json 数组，stream_open 内部会经过 json_decode(..., true) 反序列化，
+        // 导致 stdClass 实例（如空 properties {}）被还原为 PHP 空数组 []，
+        // 最终再次 json_encode 时输出 [] 而非 {}，引发 provider 的 schema 校验失败。
+        if (isset($options['json'])) {
+            $options['body'] = json_encode($options['json'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            unset($options['json']);
+        }
+
         $stream = @fopen('OdinSimpleCurl://' . json_encode($options), 'r', false);
 
         if ($stream === false) {
@@ -102,15 +111,37 @@ class OdinSimpleCurl
                 if (json_last_error() === JSON_ERROR_NONE && isset($errorData['error'])) {
                     if (is_array($errorData['error'])) {
                         $errorMessage .= ": {$errorData['error']['message']}";
+
+                        // 提取 OpenRouter 等代理层封装的底层 provider 原始错误
+                        if (isset($errorData['error']['metadata'])) {
+                            $metadata = $errorData['error']['metadata'];
+                            if (isset($metadata['raw'])) {
+                                $errorMessage .= " | provider_raw: {$metadata['raw']}";
+                            }
+                            if (isset($metadata['provider_name'])) {
+                                $errorMessage .= " | provider: {$metadata['provider_name']}";
+                            }
+                        }
+                        if (isset($errorData['error']['code']) && $errorData['error']['code'] !== $statusCode) {
+                            $errorMessage .= " | error_code: {$errorData['error']['code']}";
+                        }
                     } else {
                         $errorMessage .= ": {$errorData['error']}";
                     }
-                } elseif (! empty($errorBody)) {
-                    $truncatedBody = strlen($errorBody) > 200
-                        ? substr($errorBody, 0, 200) . '...'
+                } else {
+                    // 非标准 JSON 或无 error 字段，直接截断追加原始 body
+                    $truncatedBody = strlen($errorBody) > 500
+                        ? substr($errorBody, 0, 500) . '...'
                         : $errorBody;
                     $errorMessage .= ": {$truncatedBody}";
                 }
+
+                // 始终在日志中记录完整的原始响应体，方便排查
+                $logger = \Hyperf\Odin\Utils\LogUtil::getHyperfLogger();
+                $logger?->warning('HTTP error response body', [
+                    'status_code' => $statusCode,
+                    'raw_body' => strlen($errorBody) > 2000 ? substr($errorBody, 0, 2000) . '...' : $errorBody,
+                ]);
             }
 
             if ($statusCode >= 500) {
