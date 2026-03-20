@@ -48,17 +48,8 @@ class ClientFactory
      */
     public static function createOpenAIClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
     {
-        // 验证必要的配置参数
-        $apiKey = $config['api_key'] ?? '';
-        $baseUrl = $config['base_url'] ?? '';
-        $organization = $config['organization'] ?? '';
-
-        // 创建配置对象
-        $clientConfig = new OpenAIConfig(
-            apiKey: $apiKey,
-            organization: $organization,
-            baseUrl: $baseUrl
-        );
+        // 通过 fromArray 统一解析，支持 auto_cache / auto_cache_config 等扩展字段
+        $clientConfig = OpenAIConfig::fromArray($config);
 
         // 创建API实例
         $openAI = new OpenAI();
