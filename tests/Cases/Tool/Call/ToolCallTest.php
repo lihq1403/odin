@@ -82,19 +82,22 @@ class ToolCallTest extends ToolBaseTestCase
         $result = ToolCall::fromArray($invalidData);
         $this->assertEmpty($result);
 
-        // 测试缺少arguments字段
-        $invalidData = [
+        // function 存在但尚未下发 arguments：流式首帧合法，应得到空参数的工具调用而非跳过
+        $streamingInitialFrame = [
             [
                 'id' => 'call_invalid',
                 'type' => 'function',
                 'function' => [
                     'name' => 'test_function',
-                    // 缺少arguments字段
+                    // 缺少 arguments 字段，与 OpenAI/OpenRouter 流式首帧一致
                 ],
             ],
         ];
-        $result = ToolCall::fromArray($invalidData);
-        $this->assertEmpty($result);
+        $result = ToolCall::fromArray($streamingInitialFrame);
+        $this->assertCount(1, $result);
+        $this->assertSame('test_function', $result[0]->getName());
+        $this->assertSame([], $result[0]->getArguments());
+        $this->assertSame('', $result[0]->getStreamArguments());
 
         // 测试非JSON格式的arguments
         $invalidData = [

@@ -29,10 +29,16 @@ class ChatCompletionChoice
         $message = $choice['message'] ?? [];
         if (isset($choice['delta'])) {
             $delta = $choice['delta'];
+            // OpenRouter / mimo 等流式帧常用 delta.reasoning 增量推送；与非空 reasoning_content 冲突时保留后者
+            $reasoningContent = $delta['reasoning_content'] ?? null;
+            if (($reasoningContent === null || (is_string($reasoningContent) && trim($reasoningContent) === ''))
+                && isset($delta['reasoning']) && is_string($delta['reasoning']) && trim($delta['reasoning']) !== '') {
+                $reasoningContent = $delta['reasoning'];
+            }
             $message = [
                 'role' => $delta['role'] ?? 'assistant',
                 'content' => $delta['content'] ?? '',
-                'reasoning_content' => $delta['reasoning_content'] ?? null,
+                'reasoning_content' => $reasoningContent,
                 'tool_calls' => $delta['tool_calls'] ?? [],
             ];
             // 透传 reasoning_details（Gemini OpenAI 兼容格式），用于多轮时回传签名

@@ -74,13 +74,19 @@ class AssistantMessage extends AbstractMessage
      * 从数组创建消息实例.
      *
      * @param array $message 消息数组，content 可为 string 或 array（OpenAI 格式）
-     * @return static 消息实例
      */
     public static function fromArray(array $message): self
     {
         $content = $message['content'] ?? '';
         $toolCalls = ToolCall::fromArray($message['tool_calls'] ?? []);
         $reasoningContent = $message['reasoning_content'] ?? null;
+        // OpenRouter 等会在 message.reasoning 中直接返回思考文本（可能与 reasoning_details 重复或仅有其一）
+        if (self::isReasoningContentEmpty($reasoningContent) && isset($message['reasoning']) && is_string($message['reasoning'])) {
+            $trimmed = trim($message['reasoning']);
+            if ($trimmed !== '') {
+                $reasoningContent = $message['reasoning'];
+            }
+        }
         $reasoningDetails = isset($message['reasoning_details']) && is_array($message['reasoning_details'])
             ? $message['reasoning_details']
             : null;
@@ -98,6 +104,15 @@ class AssistantMessage extends AbstractMessage
         if ($contentParts !== null) {
             $instance->contentParts = $contentParts;
         }
+
+        // 部分服务商仅在 message.reasoning_details 中返回推理文本（如 type 为 reasoning.text），统一汇总到 reasoning_content
+        if ($reasoningDetails !== null && self::isReasoningContentEmpty($instance->reasoningContent)) {
+            $extracted = self::extractReasoningTextFromDetails($reasoningDetails);
+            if ($extracted !== '') {
+                $instance->reasoningContent = $extracted;
+            }
+        }
+
         return $instance;
     }
 
@@ -285,6 +300,39 @@ class AssistantMessage extends AbstractMessage
             }
         }
         return implode('', $parts);
+    }
+
+    /**
+     * 从 reasoning_details 中收集可见推理文本（逐项的 text 字段）.
+     *
+     * @param array<int, mixed> $reasoningDetails
+     */
+    private static function extractReasoningTextFromDetails(array $reasoningDetails): string
+    {
+        $parts = [];
+        foreach ($reasoningDetails as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+            if (! isset($item['text']) || ! is_string($item['text'])) {
+                continue;
+            }
+            if (trim($item['text']) === '') {
+                continue;
+            }
+            $parts[] = $item['text'];
+        }
+
+        return implode("\n\n", $parts);
+    }
+
+    private static function isReasoningContentEmpty(?string $reasoningContent): bool
+    {
+        if ($reasoningContent === null) {
+            return true;
+        }
+
+        return trim($reasoningContent) === '';
     }
 
     /**

@@ -157,6 +157,93 @@ class AssistantMessageTest extends AbstractTestCase
     }
 
     /**
+     * 测试仅含 reasoning_details（如 reasoning.text）时汇总到 reasoning_content.
+     */
+    public function testFromArrayExtractsReasoningContentFromReasoningDetails()
+    {
+        $thinking = '用户要求写一篇100字的关于勇敢的骑士和龙的冒险故事。';
+        $array = [
+            'role' => 'assistant',
+            'content' => '',
+            'reasoning_details' => [
+                [
+                    'type' => 'reasoning.text',
+                    'text' => $thinking,
+                    'format' => 'unknown',
+                    'index' => 0,
+                ],
+            ],
+            'tool_calls' => [
+                [
+                    'id' => 'call_1',
+                    'type' => 'function',
+                    'function' => [
+                        'name' => 'write_file',
+                        'arguments' => '{}',
+                    ],
+                ],
+            ],
+        ];
+
+        $message = AssistantMessage::fromArray($array);
+        $this->assertSame($thinking, $message->getReasoningContent());
+        $this->assertTrue($message->hasReasoningContent());
+        $this->assertIsArray($message->getReasoningDetails());
+        $out = $message->toArray();
+        $this->assertSame($thinking, $out['reasoning_content']);
+        $this->assertSame($array['reasoning_details'], $out['reasoning_details']);
+    }
+
+    /**
+     * 已有 reasoning_content 时不应被 reasoning_details 覆盖.
+     */
+    public function testFromArrayReasoningContentTakesPrecedenceOverDetails()
+    {
+        $array = [
+            'role' => 'assistant',
+            'content' => 'hi',
+            'reasoning_content' => '显式思考',
+            'reasoning_details' => [
+                ['type' => 'reasoning.text', 'text' => '详情里的思考'],
+            ],
+        ];
+        $message = AssistantMessage::fromArray($array);
+        $this->assertSame('显式思考', $message->getReasoningContent());
+    }
+
+    /**
+     * 多条 reasoning_details 文本以换行连接.
+     */
+    public function testFromArrayJoinsMultipleReasoningDetailTexts()
+    {
+        $array = [
+            'role' => 'assistant',
+            'content' => '',
+            'reasoning_details' => [
+                ['type' => 'reasoning.text', 'text' => '第一段'],
+                ['type' => 'reasoning.text', 'text' => '第二段'],
+            ],
+        ];
+        $message = AssistantMessage::fromArray($array);
+        $this->assertSame("第一段\n\n第二段", $message->getReasoningContent());
+    }
+
+    /**
+     * OpenRouter 等可能仅返回 message.reasoning 字符串而无 reasoning_details.
+     */
+    public function testFromArrayUsesTopLevelReasoningField()
+    {
+        $text = '仅在 reasoning 字段中的思考过程';
+        $message = AssistantMessage::fromArray([
+            'role' => 'assistant',
+            'content' => null,
+            'reasoning' => $text,
+        ]);
+        $this->assertSame($text, $message->getReasoningContent());
+        $this->assertSame('', $message->getContent());
+    }
+
+    /**
      * 测试 content 为 array 格式（OpenAI 最新格式）.
      */
     public function testFromArrayWithContentAsArray()

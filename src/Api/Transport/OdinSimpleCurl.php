@@ -20,6 +20,7 @@ use Hyperf\Odin\Exception\LLMException\LLMNetworkException;
 use Hyperf\Odin\Exception\LLMException\Network\LLMConnectionTimeoutException;
 use Hyperf\Odin\Exception\LLMException\Network\LLMReadTimeoutException;
 use Hyperf\Odin\Exception\RuntimeException;
+use Hyperf\Odin\Utils\LogUtil;
 
 class OdinSimpleCurl
 {
@@ -137,7 +138,7 @@ class OdinSimpleCurl
                 }
 
                 // 始终在日志中记录完整的原始响应体，方便排查
-                $logger = \Hyperf\Odin\Utils\LogUtil::getHyperfLogger();
+                $logger = LogUtil::getHyperfLogger();
                 $logger?->warning('HTTP error response body', [
                     'status_code' => $statusCode,
                     'raw_body' => strlen($errorBody) > 2000 ? substr($errorBody, 0, 2000) . '...' : $errorBody,
