@@ -83,7 +83,7 @@ class ToolCall implements Arrayable
 
     public function toArrayWithStream(): array
     {
-        return [
+        $result = [
             'id' => $this->getId(),
             'function' => [
                 'name' => $this->getName(),
@@ -91,6 +91,12 @@ class ToolCall implements Arrayable
             ],
             'type' => $this->getType(),
         ];
+        // 将 stream_index 透传到输出，供下游正确组装并行工具调用的 index
+        $streamIndex = $this->getMetadata('stream_index');
+        if ($streamIndex !== null) {
+            $result['index'] = $streamIndex;
+        }
+        return $result;
     }
 
     public function getName(): string
