@@ -72,16 +72,22 @@ class DynamicCacheStrategy implements CacheStrategyInterface
         if (in_array(0, $cachePointIndex, true)) {
             $request->setToolsCache(true);
         }
-        $systemCache = false;
-        if (in_array(1, $cachePointIndex, true)) {
-            $systemCache = true;
-        }
-        foreach ($request->getMessages() as $index => $message) {
-            if ($message instanceof SystemMessage && $systemCache) {
-                $message->setCachePoint(new CachePoint());
-            }
-            if (in_array($index + 1, $cachePointIndex, true)) {
-                $message->setCachePoint(new CachePoint());
+        $systemCache = in_array(1, $cachePointIndex, true);
+
+        // non-system 消息在 cachePointMessages 中从 index 2 开始，需独立跟踪，不能依赖 $index+1 偏移
+        // 否则无 SystemMessage 时索引会对不上（$index+1 假设了 SystemMessage 始终在 messages[0]）
+        $msgIndex = 2;
+        foreach ($request->getMessages() as $message) {
+            if ($message instanceof SystemMessage) {
+                if ($systemCache) {
+                    $message->setCachePoint(new CachePoint());
+                }
+                // SystemMessage 固定占 cachePointMessages[1]，不占用 msgIndex
+            } else {
+                if (in_array($msgIndex, $cachePointIndex, true)) {
+                    $message->setCachePoint(new CachePoint());
+                }
+                ++$msgIndex;
             }
         }
 
@@ -94,8 +100,8 @@ class DynamicCacheStrategy implements CacheStrategyInterface
     private function addFixedCachePointIndex(DynamicMessageCacheManager $dynamicMessageCacheManager, AutoCacheConfig $autoCacheConfig): void
     {
         // 看一下 tools+system 是否标记了缓存点，固定机位
-        if (! in_array(0, $dynamicMessageCacheManager->getCachePointMessages(), true)
-            && ! in_array(1, $dynamicMessageCacheManager->getCachePointMessages(), true)) {
+        if (! in_array(0, $dynamicMessageCacheManager->getCachePointIndex(), true)
+            && ! in_array(1, $dynamicMessageCacheManager->getCachePointIndex(), true)) {
             // 观察是否需要标记
             if ($dynamicMessageCacheManager->getToolTokens() + $dynamicMessageCacheManager->getSystemTokens() >= $autoCacheConfig->getMinCacheTokens()) {
                 // 如果都有，则添加到 system

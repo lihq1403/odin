@@ -95,10 +95,14 @@ class DynamicMessageCacheManager
 
     /**
      * 获取最后一条消息的索引.
+     * 使用 max(array_keys()) 而非 count()-1，因为 cachePointMessages 是稀疏数组（无 SystemMessage 时 key 1 缺失）.
      */
     public function getLastMessageIndex(): int
     {
-        return count($this->cachePointMessages) - 1;
+        if (empty($this->cachePointMessages)) {
+            return 0;
+        }
+        return max(array_keys($this->cachePointMessages));
     }
 
     public function loadHistoryCachePoint(DynamicMessageCacheManager $lastDynamicMessageCacheManager): bool
