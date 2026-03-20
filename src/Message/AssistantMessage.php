@@ -128,6 +128,12 @@ class AssistantMessage extends AbstractMessage
             $toolCalls[] = $toolCall->toArray();
         }
         $content = $this->contentParts !== null ? $this->contentParts : $this->content;
+
+        // 有缓存点时，由 CachePoint 负责将 content 包装为带 cache_control 的内容块（OpenRouter/Anthropic 格式）
+        if ($this->cachePoint !== null) {
+            $content = $this->cachePoint->wrapContentWithCacheControl($content);
+        }
+
         $result = [
             'role' => $this->role->value,
             'content' => $content,

@@ -13,12 +13,14 @@ declare(strict_types=1);
 namespace Hyperf\Odin\Api\Providers\OpenAI;
 
 use Hyperf\Odin\Api\Providers\AbstractClient;
+use Hyperf\Odin\Api\Providers\AwsBedrock\Cache\AwsBedrockCachePointManager;
 use Hyperf\Odin\Api\Request\ChatCompletionRequest;
 use Hyperf\Odin\Api\RequestOptions\ApiOptions;
 use Hyperf\Odin\Api\Response\ChatCompletionResponse;
 use Hyperf\Odin\Api\Response\ChatCompletionStreamResponse;
 use Hyperf\Odin\Event\AfterChatCompletionsStreamEvent;
 use Hyperf\Odin\Message\AssistantMessage;
+use Hyperf\Odin\Utils\ModelUtil;
 use Psr\Log\LoggerInterface;
 
 class Client extends AbstractClient
@@ -37,6 +39,7 @@ class Client extends AbstractClient
     public function chatCompletions(ChatCompletionRequest $chatRequest): ChatCompletionResponse
     {
         $this->restoreReasoningDetailsFromCache($chatRequest);
+        $this->applyClaudeCachePoints($chatRequest);
         $response = parent::chatCompletions($chatRequest);
         $this->cacheReasoningDetailsFromResponse($response);
         return $response;
@@ -48,6 +51,7 @@ class Client extends AbstractClient
     public function chatCompletionsStream(ChatCompletionRequest $chatRequest): ChatCompletionStreamResponse
     {
         $this->restoreReasoningDetailsFromCache($chatRequest);
+        $this->applyClaudeCachePoints($chatRequest);
         $response = parent::chatCompletionsStream($chatRequest);
 
         /** @var AfterChatCompletionsStreamEvent $event */
@@ -101,6 +105,31 @@ class Client extends AbstractClient
         }
 
         return $headers;
+    }
+
+    /**
+     * 对 Claude 模型应用缓存点逻辑.
+     * 仅当 OpenAIConfig 开启了 autoCache 且当前模型为 Claude 系列时执行.
+     * 执行后，messages 上带有 CachePoint 的消息在序列化（toArray）时会自动输出 cache_control 字段.
+     */
+    private function applyClaudeCachePoints(ChatCompletionRequest $chatRequest): void
+    {
+        /** @var OpenAIConfig $config */
+        $config = $this->config;
+        if (! $config->isAutoCache()) {
+            return;
+        }
+        if (! ModelUtil::isClaudeModel($chatRequest->getModel())) {
+            return;
+        }
+        $cachePointManager = new AwsBedrockCachePointManager($config->getAutoCacheConfig());
+        $cachePointManager->configureCachePoints($chatRequest);
+
+        $this->logger?->debug('OpenAIClaudeCachePoints', [
+            'model' => $chatRequest->getModel(),
+            'cache_points' => $chatRequest->getCachePointInfo(),
+            'tools_cache' => $chatRequest->isToolsCache() ? 1 : 0,
+        ]);
     }
 
     /**

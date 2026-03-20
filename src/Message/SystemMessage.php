@@ -39,6 +39,13 @@ class SystemMessage extends AbstractMessage
 
     public function toArray(): array
     {
+        // 有缓存点时，由 CachePoint 负责将 content 包装为带 cache_control 的内容块（OpenRouter/Anthropic 格式）
+        if ($this->cachePoint !== null) {
+            return [
+                'role' => $this->role->value,
+                'content' => $this->cachePoint->wrapContentWithCacheControl($this->content),
+            ];
+        }
         return [
             'role' => $this->role->value,
             'content' => $this->content,

@@ -73,6 +73,12 @@ class UserMessage extends AbstractMessage
             }
             $data['content'] = $contents;
         }
+
+        // 有缓存点时，由 CachePoint 负责将 content 包装为带 cache_control 的内容块（OpenRouter/Anthropic 格式）
+        if ($this->cachePoint !== null) {
+            $data['content'] = $this->cachePoint->wrapContentWithCacheControl($data['content']);
+        }
+
         return $data;
     }
 

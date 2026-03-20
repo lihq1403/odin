@@ -42,6 +42,20 @@ class ModelUtil
     }
 
     /**
+     * 检查是否为 Claude 系列模型.
+     * 除标准 "claude" 前缀外，也匹配 sonnet / opus / haiku 等 Claude 专属系列名，
+     * 以兼容 MaaS_Cl_Sonnet_4.6_20260217 这类自定义命名格式.
+     */
+    public static function isClaudeModel(string $model): bool
+    {
+        $lower = strtolower($model);
+        return str_contains($lower, 'claude')
+            || str_contains($lower, 'sonnet')
+            || str_contains($lower, 'opus')
+            || str_contains($lower, 'haiku');
+    }
+
+    /**
      * 获取模型提供商类型.
      *
      * @return string 返回 'dashscope'、'openai'、'deepseek' 等提供商标识
