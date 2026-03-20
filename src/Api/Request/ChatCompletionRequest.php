@@ -388,6 +388,22 @@ class ChatCompletionRequest implements RequestInterface
         ];
     }
 
+    /**
+     * 获取缓存点信息，以位图形式返回每条消息是否设置了缓存点.
+     * 数组长度等于消息总数，1 表示该消息有缓存点，0 表示没有，例如 [1,1,0,0,1].
+     * tools 缓存状态通过 isToolsCache() 单独获取.
+     *
+     * @return int[]
+     */
+    public function getCachePointInfo(): array
+    {
+        $bitmap = [];
+        foreach ($this->messages as $message) {
+            $bitmap[] = $message->getCachePoint() !== null ? 1 : 0;
+        }
+        return $bitmap;
+    }
+
     public function setTools(array $tools): void
     {
         $this->tools = $tools;

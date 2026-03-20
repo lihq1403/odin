@@ -59,6 +59,8 @@ class ConverseClient extends Client
                 'model_id' => $modelId,
                 'args' => $args,
                 'token_estimate' => $chatRequest->getTokenEstimateDetail(),
+                'cache_points' => $this->isAutoCache() ? $chatRequest->getCachePointInfo() : [],
+                'tools_cache' => $this->isAutoCache() ? ($chatRequest->isToolsCache() ? 1 : 0) : 0,
                 'has_proxy' => $this->requestOptions->hasProxy(),
             ], $this->requestOptions));
 
@@ -125,6 +127,8 @@ class ConverseClient extends Client
                 'model_id' => $modelId,
                 'args' => $args,
                 'token_estimate' => $chatRequest->getTokenEstimateDetail(),
+                'cache_points' => $this->isAutoCache() ? $chatRequest->getCachePointInfo() : [],
+                'tools_cache' => $this->isAutoCache() ? ($chatRequest->isToolsCache() ? 1 : 0) : 0,
                 'has_proxy' => $this->requestOptions->hasProxy(),
             ], $this->requestOptions));
 

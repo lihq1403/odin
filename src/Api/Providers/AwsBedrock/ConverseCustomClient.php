@@ -125,6 +125,8 @@ class ConverseCustomClient extends AbstractClient
                 'url' => $url,
                 'body' => $requestBody,
                 'token_estimate' => $chatRequest->getTokenEstimateDetail(),
+                'cache_points' => $this->isAutoCache() ? $chatRequest->getCachePointInfo() : [],
+                'tools_cache' => $this->isAutoCache() ? ($chatRequest->isToolsCache() ? 1 : 0) : 0,
                 'has_proxy' => $this->requestOptions->hasProxy(),
             ], $this->requestOptions));
 
@@ -209,6 +211,8 @@ class ConverseCustomClient extends AbstractClient
                 'url' => $url,
                 'body' => $requestBody,
                 'token_estimate' => $chatRequest->getTokenEstimateDetail(),
+                'cache_points' => $this->isAutoCache() ? $chatRequest->getCachePointInfo() : [],
+                'tools_cache' => $this->isAutoCache() ? ($chatRequest->isToolsCache() ? 1 : 0) : 0,
                 'has_proxy' => $this->requestOptions->hasProxy(),
             ], $this->requestOptions));
 

@@ -82,7 +82,7 @@ class DynamicCacheStrategy implements CacheStrategyInterface
                 if ($systemCache) {
                     $message->setCachePoint(new CachePoint());
                 }
-                // SystemMessage 固定占 cachePointMessages[1]，不占用 msgIndex
+            // SystemMessage 固定占 cachePointMessages[1]，不占用 msgIndex
             } else {
                 if (in_array($msgIndex, $cachePointIndex, true)) {
                     $message->setCachePoint(new CachePoint());
