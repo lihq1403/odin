@@ -20,6 +20,7 @@ use Hyperf\Odin\Api\Response\ChatCompletionResponse;
 use Hyperf\Odin\Api\Response\ChatCompletionStreamResponse;
 use Hyperf\Odin\Event\AfterChatCompletionsStreamEvent;
 use Hyperf\Odin\Message\AssistantMessage;
+use Hyperf\Odin\Utils\LoggingConfigHelper;
 use Hyperf\Odin\Utils\ModelUtil;
 use Psr\Log\LoggerInterface;
 
@@ -125,11 +126,11 @@ class Client extends AbstractClient
         $cachePointManager = new AwsBedrockCachePointManager($config->getAutoCacheConfig());
         $cachePointManager->configureCachePoints($chatRequest);
 
-        $this->logger?->debug('OpenAIClaudeCachePoints', [
+        $this->logger?->info('OpenAIClaudeCachePoints', LoggingConfigHelper::filterAndFormatLogData([
             'model' => $chatRequest->getModel(),
             'cache_points' => $chatRequest->getCachePointInfo(),
             'tools_cache' => $chatRequest->isToolsCache() ? 1 : 0,
-        ]);
+        ], $this->requestOptions));
     }
 
     /**
