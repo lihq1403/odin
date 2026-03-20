@@ -143,6 +143,11 @@ class ChatCompletionRequest implements RequestInterface
             $json['thinking'] = $this->thinking;
         }
 
+        if (str_contains($this->model, 'minimax')) {
+            // minimax 特有参数
+            $json['reasoning_split'] = true;
+        }
+
         return [
             RequestOptions::JSON => $json,
             RequestOptions::STREAM => $this->stream,
