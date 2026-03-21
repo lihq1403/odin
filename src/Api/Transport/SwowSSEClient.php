@@ -86,7 +86,7 @@ class SwowSSEClient implements SseEventProducerInterface
      */
     public static function buildSwowResponse(string $url, array $headers, string $body, ?string $proxyUrl = null): ResponseInterface
     {
-        LogUtil::getHyperfLogger()?->debug('SwowSSEClient::buildSwowResponse');
+        LogUtil::getHyperfLogger()?->info('SwowSSEClient::buildSwowResponse');
 
         [$scheme, $host, $port] = self::parseUrl($url);
 
