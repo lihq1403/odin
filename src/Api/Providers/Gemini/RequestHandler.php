@@ -488,6 +488,11 @@ class RequestHandler
      */
     private static function convertThinkingConfig(string $model, array $thinking): array
     {
+        // 这里可能会携带 models/ 前缀，暂时去除一下
+        if (str_starts_with($model, 'models/')) {
+            $model = substr($model, strlen('models/'));
+        }
+
         $config = [];
 
         // Map thinking budget if present
