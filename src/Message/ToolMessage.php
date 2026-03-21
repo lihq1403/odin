@@ -162,7 +162,6 @@ class ToolMessage extends AbstractMessage
             $content = $text;
         }
         // 兜底：极端情况下 content 仍为数组时转为字符串，避免传入构造函数类型错误（主路径下 PHPStan 认为不可达）
-        // @phpstan-ignore-next-line
         if (is_array($content)) {
             $content = json_encode($content, JSON_UNESCAPED_UNICODE);
         }
