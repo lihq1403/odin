@@ -144,4 +144,29 @@ class UserMessageTest extends AbstractTestCase
         $this->assertSame('text', $contentArray['content'][0]['type']);
         $this->assertSame('这是文本', $contentArray['content'][0]['text']);
     }
+
+    /**
+     * 带 cache_control 的文本块；以及无 type 仅有 text 的块（与 ToolMessage 等格式对齐）.
+     */
+    public function testFromArrayWithCacheControlAndTextOnlyBlocks()
+    {
+        $message = UserMessage::fromArray([
+            'content' => [
+                [
+                    'type' => 'text',
+                    'text' => '第一段',
+                    'cache_control' => ['type' => 'ephemeral'],
+                ],
+                [
+                    'text' => '第二段',
+                ],
+            ],
+        ]);
+
+        $contents = $message->getContents();
+        $this->assertIsArray($contents);
+        $this->assertCount(2, $contents);
+        $this->assertSame('第一段', $contents[0]->getText());
+        $this->assertSame('第二段', $contents[1]->getText());
+    }
 }

@@ -71,4 +71,28 @@ class SystemMessageTest extends AbstractTestCase
         $message->setIdentifier('sys-from-array');
         $this->assertSame('sys-from-array', $message->getIdentifier());
     }
+
+    /**
+     * 与带缓存点的 toArray 格式互操作：content 为内容块数组时还原为纯文本.
+     */
+    public function testFromArrayWithContentBlocks()
+    {
+        $array = [
+            'content' => [
+                [
+                    'type' => 'text',
+                    'text' => '第一段',
+                    'cache_control' => ['type' => 'ephemeral'],
+                ],
+                [
+                    'type' => 'text',
+                    'text' => '第二段',
+                ],
+            ],
+        ];
+
+        $message = SystemMessage::fromArray($array);
+
+        $this->assertSame('第一段第二段', $message->getContent());
+    }
 }

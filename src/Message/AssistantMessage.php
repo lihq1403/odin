@@ -303,6 +303,9 @@ class AssistantMessage extends AbstractMessage
                 $parts[] = $part['text'];
             } elseif ($type === 'refusal' && isset($part['refusal'])) {
                 $parts[] = $part['refusal'];
+            } elseif (($type === null || $type === '') && isset($part['text']) && is_string($part['text'])) {
+                // 与 ToolMessage/SystemMessage 等对齐：部分序列化仅有 text 无 type
+                $parts[] = $part['text'];
             }
         }
         return implode('', $parts);

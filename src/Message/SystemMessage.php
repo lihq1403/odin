@@ -28,11 +28,20 @@ class SystemMessage extends AbstractMessage
      * 从数组创建消息实例.
      *
      * @param array $message 消息数组
-     * @return static 消息实例
+     * @return self 消息实例
      */
     public static function fromArray(array $message): self
     {
         $content = $message['content'] ?? '';
+        if (is_array($content)) {
+            $text = '';
+            foreach ($content as $item) {
+                if (isset($item['text'])) {
+                    $text .= $item['text'];
+                }
+            }
+            $content = $text;
+        }
 
         return new self($content);
     }

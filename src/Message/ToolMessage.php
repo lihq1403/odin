@@ -147,7 +147,7 @@ class ToolMessage extends AbstractMessage
      * 从数组创建消息实例.
      *
      * @param array $message 消息数组
-     * @return static 消息实例
+     * @return self 消息实例
      */
     public static function fromArray(array $message): self
     {
@@ -161,6 +161,8 @@ class ToolMessage extends AbstractMessage
             }
             $content = $text;
         }
+        // 兜底：极端情况下 content 仍为数组时转为字符串，避免传入构造函数类型错误（主路径下 PHPStan 认为不可达）
+        // @phpstan-ignore-next-line
         if (is_array($content)) {
             $content = json_encode($content, JSON_UNESCAPED_UNICODE);
         }

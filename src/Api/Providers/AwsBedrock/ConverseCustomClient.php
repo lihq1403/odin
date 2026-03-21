@@ -42,6 +42,7 @@ use Hyperf\Odin\Message\UserMessage;
 use Hyperf\Odin\Utils\EventUtil;
 use Hyperf\Odin\Utils\LoggingConfigHelper;
 use Hyperf\Odin\Utils\LogUtil;
+use Hyperf\Odin\Utils\ProxyUtil;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
 use Throwable;
@@ -220,13 +221,16 @@ class ConverseCustomClient extends AbstractClient
             $signedHeaders = array_map(fn ($values) => implode(', ', $values), $signedRequest->getHeaders());
 
             if (Coroutine::id()) {
-                // 优先使用 Swow 原生客户端：已启用 + Swow 可用 + 无代理配置
+                $proxyUrl = $this->requestOptions->getProxy();
+                $swowCanHandleProxy = $proxyUrl === null || $proxyUrl === '' || ProxyUtil::toSwowProxyArray($proxyUrl) !== null;
+
+                // 优先使用 Swow MagicClient：已启用 + Swow 可用 + 代理可解析为 Swow 格式（或无需代理）
                 // $signedHeaders 含 Accept: application/vnd.amazon.eventstream，会覆盖 buildSwowResponse 默认的 text/event-stream
                 if ($this->requestOptions->isUseSwowTransport()
                     && SwowSSEClient::isSupported()
-                    && ! $this->requestOptions->hasProxy()
+                    && $swowCanHandleProxy
                 ) {
-                    $response = SwowSSEClient::buildSwowResponse($url, $signedHeaders, $bodyJson);
+                    $response = SwowSSEClient::buildSwowResponse($url, $signedHeaders, $bodyJson, $proxyUrl);
                 } else {
                     // 降级到 OdinSimpleCurl
                     // body 使用签名前保存的 $bodyJson，读流会破坏签名

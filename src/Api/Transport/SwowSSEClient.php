@@ -18,11 +18,12 @@ use Hyperf\Odin\Exception\LLMException\LLMApiException;
 use Hyperf\Odin\Exception\LLMException\LLMNetworkException;
 use Hyperf\Odin\Exception\RuntimeException;
 use Hyperf\Odin\Utils\LogUtil;
+use Hyperf\Odin\Utils\ProxyUtil;
 use IteratorAggregate;
 use JsonException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Log\LoggerInterface;
-use Swow\Psr7\Client\Client;
+use Swow\Psr7\Client\MagicClient;
 use Swow\Psr7\Psr7;
 use Throwable;
 
@@ -35,7 +36,7 @@ use Throwable;
  * 仅在 Swow 扩展可用且处于协程上下文时使用.
  *
  * 使用方式：
- *   $response = SwowSSEClient::buildSwowResponse($url, $headers, $body);
+ *   $response = SwowSSEClient::buildSwowResponse($url, $headers, $body, $proxyUrl);
  *   $client   = new SwowSSEClient($response, $timeoutConfig, $logger);
  *
  * @implements IteratorAggregate<int, SSEEvent>
@@ -66,7 +67,7 @@ class SwowSSEClient implements SseEventProducerInterface
      */
     public static function isSupported(): bool
     {
-        return class_exists('Swow\Psr7\Client\Client')
+        return class_exists('Swow\Psr7\Client\MagicClient')
             && class_exists('Swow\Psr7\Psr7')
             && class_exists('Swow\Psr7\Message\EventStreamEvent');
     }
@@ -78,15 +79,16 @@ class SwowSSEClient implements SseEventProducerInterface
      * 因此 Client 不会被 GC，调用方无需在外部持久化 $client 变量.
      *
      * @param array<string, string> $headers 请求头（不含 Host，内部自动补充）
+     * @param null|string $proxyUrl 代理 URL（与 ApiOptions::getProxy() 同源）；为 null 时直连
      * @throws LLMNetworkException
      * @throws LLMApiException
      * @throws LLMInvalidRequestException
      */
-    public static function buildSwowResponse(string $url, array $headers, string $body): ResponseInterface
+    public static function buildSwowResponse(string $url, array $headers, string $body, ?string $proxyUrl = null): ResponseInterface
     {
         LogUtil::getHyperfLogger()?->debug('SwowSSEClient::buildSwowResponse');
 
-        [$scheme, $host, $port, $path] = self::parseUrl($url);
+        [$scheme, $host, $port] = self::parseUrl($url);
 
         $hostHeader = $host;
         if (! (($scheme === 'https' && $port === 443) || ($scheme === 'http' && $port === 80))) {
@@ -102,21 +104,21 @@ class SwowSSEClient implements SseEventProducerInterface
         $mergedHeaders = array_merge($defaultHeaders, $headers);
         $requestHeaders = array_merge(['Host' => $hostHeader], $mergedHeaders);
 
-        // 构建 PSR-7 请求
+        // MagicClient 需要绝对 URI；代理由 setProxy + sendRequest 内建处理
         $request = Psr7::createRequest(
             method: 'POST',
-            uri: $path,
+            uri: $url,
             headers: $requestHeaders,
             body: $body,
         );
 
-        // 建立 Swow 原生 HTTP 连接，启用分块响应流式读取
-        $client = (new Client())
-            ->setStreamingChunkedResponse(true)
-            ->connect($host, $port);
-
-        if ($scheme === 'https') {
-            $client->enableCrypto(['peer_name' => (string) $host]);
+        $client = (new MagicClient())->setStreamingChunkedResponse(true);
+        $swowProxy = ProxyUtil::toSwowProxyArray($proxyUrl);
+        if ($proxyUrl !== null && $proxyUrl !== '' && $swowProxy === null) {
+            throw new LLMNetworkException("Swow 不支持的代理 URL 格式: {$proxyUrl}");
+        }
+        if ($swowProxy !== null) {
+            $client->setProxy($swowProxy);
         }
 
         try {

@@ -38,6 +38,7 @@ use Hyperf\Odin\Exception\LLMException\LLMErrorHandler;
 use Hyperf\Odin\Utils\EventUtil;
 use Hyperf\Odin\Utils\LoggingConfigHelper;
 use Hyperf\Odin\Utils\LogUtil;
+use Hyperf\Odin\Utils\ProxyUtil;
 use Hyperf\Odin\Utils\TimeUtil;
 use IteratorAggregate;
 use Psr\Http\Message\ResponseInterface;
@@ -217,8 +218,8 @@ abstract class AbstractClient implements ClientInterface
      * 发送流式 HTTP 请求，自动选择最优传输方式（Swow / OdinSimpleCurl / Guzzle）.
      *
      * 传输优先级：
-     *   1. Swow 原生客户端：isUseSwowTransport() + isSupported() + 无代理 + 协程环境
-     *   2. OdinSimpleCurl：协程环境（含代理）
+     *   1. Swow MagicClient：isUseSwowTransport() + isSupported() + 协程环境（直连或 Swow 支持的代理）
+     *   2. OdinSimpleCurl：协程环境下代理无法交给 Swow 时，或其它降级场景
      *   3. Guzzle：非协程环境
      *
      * @param array<string, mixed> $options Guzzle 风格请求选项（json/headers/stream/timeout 等）
@@ -231,13 +232,16 @@ abstract class AbstractClient implements ClientInterface
                 $options['headers'][$key] = $value;
             }
 
-            // 优先使用 Swow 原生客户端：已启用 + Swow 可用 + 无代理配置
+            $proxyUrl = $this->requestOptions->getProxy();
+            $swowCanHandleProxy = $proxyUrl === null || $proxyUrl === '' || ProxyUtil::toSwowProxyArray($proxyUrl) !== null;
+
+            // 优先使用 Swow MagicClient：已启用 + Swow 可用 + 代理可解析为 Swow 格式（或无需代理）
             if ($this->requestOptions->isUseSwowTransport()
                 && SwowSSEClient::isSupported()
-                && ! $this->requestOptions->hasProxy()
+                && $swowCanHandleProxy
             ) {
                 $body = json_encode($options['json'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                $response = SwowSSEClient::buildSwowResponse($url, $options['headers'] ?? [], (string) $body);
+                $response = SwowSSEClient::buildSwowResponse($url, $options['headers'] ?? [], (string) $body, $proxyUrl);
                 return [
                     'response' => $response,
                     'duration' => $this->calculateDuration($startTime),

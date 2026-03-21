@@ -111,7 +111,7 @@ class UserMessage extends AbstractMessage
      * 从数组创建消息实例.
      *
      * @param array $message 消息数组
-     * @return static 消息实例
+     * @return self 消息实例
      */
     public static function fromArray(array $message): self
     {
@@ -122,7 +122,11 @@ class UserMessage extends AbstractMessage
         } elseif (is_array($content)) {
             $instance = new self('');
             foreach ($content as $item) {
-                $userMessageContent = (new UserMessageContent($item['type'] ?? ''))
+                $type = $item['type'] ?? '';
+                if ($type === '' && isset($item['text']) && is_string($item['text']) && trim($item['text']) !== '') {
+                    $type = UserMessageContent::TEXT;
+                }
+                $userMessageContent = (new UserMessageContent($type))
                     ->setText($item['text'] ?? '')
                     ->setImageUrl($item['image_url']['url'] ?? '');
                 if ($userMessageContent->isValid()) {

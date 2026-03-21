@@ -111,4 +111,59 @@ class ProxyUtil
             curl_setopt($ch, $option, $value);
         }
     }
+
+    /**
+     * 将 proxy URL 转为 Swow MagicClient::setProxy() 所需结构。
+     * 无法支持时返回 null（调用方应降级到 curl 等其它传输）。
+     *
+     * SOCKS5 统一使用 remote_dns=true，与 {@see buildCurlProxyOptions} 中 SOCKS5_HOSTNAME 语义一致。
+     *
+     * @return ?array{
+     *     type: string,
+     *     host: string,
+     *     port: int,
+     *     username: ?string,
+     *     password: ?string,
+     *     remote_dns: bool
+     * }
+     */
+    public static function toSwowProxyArray(?string $proxyUrl): ?array
+    {
+        if ($proxyUrl === null || $proxyUrl === '') {
+            return null;
+        }
+
+        $parts = parse_url($proxyUrl);
+        if ($parts === false || ! isset($parts['host'])) {
+            return null;
+        }
+
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $username = isset($parts['user']) ? rawurldecode((string) $parts['user']) : null;
+        $password = isset($parts['pass']) ? rawurldecode((string) $parts['pass']) : null;
+
+        if (self::isSocks5($proxyUrl)) {
+            return [
+                'type' => 'socks5',
+                'host' => strtolower((string) $parts['host']),
+                'port' => (int) ($parts['port'] ?? 1080),
+                'username' => $username,
+                'password' => $password,
+                'remote_dns' => true,
+            ];
+        }
+
+        if ($scheme === 'http' || $scheme === 'https') {
+            return [
+                'type' => 'http',
+                'host' => strtolower((string) $parts['host']),
+                'port' => (int) ($parts['port'] ?? ($scheme === 'https' ? 443 : 80)),
+                'username' => $username,
+                'password' => $password,
+                'remote_dns' => false,
+            ];
+        }
+
+        return null;
+    }
 }

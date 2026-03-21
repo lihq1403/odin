@@ -267,6 +267,25 @@ class AssistantMessageTest extends AbstractTestCase
     }
 
     /**
+     * 带 cache_control 的内容块与仅有 text 无 type 的块（与 Odin 序列化互操作）.
+     */
+    public function testFromArrayWithCacheControlAndTextOnlyParts()
+    {
+        $message = AssistantMessage::fromArray([
+            'role' => 'assistant',
+            'content' => [
+                [
+                    'type' => 'text',
+                    'text' => 'A',
+                    'cache_control' => ['type' => 'ephemeral'],
+                ],
+                ['text' => 'B'],
+            ],
+        ]);
+        $this->assertSame('AB', $message->getContent());
+    }
+
+    /**
      * 测试 content 为 array 格式且包含 refusal 类型.
      */
     public function testFromArrayWithRefusalContentPart()
