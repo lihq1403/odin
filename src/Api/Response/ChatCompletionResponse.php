@@ -106,6 +106,9 @@ class ChatCompletionResponse extends AbstractResponse implements Stringable
         if ($this->totalTokenEstimate) {
             return $this->totalTokenEstimate;
         }
+        if (! $this->model) {
+            return 0;
+        }
         $estimator = new TokenEstimator($this->model);
 
         $this->totalTokenEstimate = $estimator->estimateTokens($this->getFirstChoice()?->getMessage()?->getContent() ?? '');

@@ -748,7 +748,7 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
             'id' => $this->getId(),
             'object' => $this->getObject() ?: 'chat.completion',
             'created' => $this->getCreated(),
-            'model' => $this->getModel(),
+            'model' => $this->getModel() ?? $this->afterChatCompletionsStreamEvent->getCompletionRequest()->getModel(),
             'choices' => $mergedChoices,
         ];
 
