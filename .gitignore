@@ -18,3 +18,4 @@ bin/
 publish/
 config/
 .obsidian/
+examples/mapper/request.json
