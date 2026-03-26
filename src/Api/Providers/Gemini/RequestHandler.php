@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Hyperf\Odin\Api\Providers\Gemini;
 
 use Hyperf\Odin\Api\Request\ChatCompletionRequest;
+use Hyperf\Odin\Api\Request\ThinkingConfig;
 use Hyperf\Odin\Contract\Message\MessageInterface;
 use Hyperf\Odin\Contract\Tool\ToolInterface;
 use Hyperf\Odin\Message\AssistantMessage;
@@ -473,7 +474,7 @@ class RequestHandler
 
         // According to API docs, thinkingConfig should be inside generationConfig
         $thinking = $request->getThinking();
-        if (! empty($thinking)) {
+        if ($thinking !== null && $thinking->isEnabled()) {
             $thinkingConfig = self::convertThinkingConfig($request->getModel(), $thinking);
             if (! empty($thinkingConfig)) {
                 $config['thinkingConfig'] = $thinkingConfig;
@@ -486,30 +487,8 @@ class RequestHandler
     /**
      * Convert thinking config to Gemini format.
      */
-    private static function convertThinkingConfig(string $model, array $thinking): array
+    private static function convertThinkingConfig(string $model, ThinkingConfig $thinking): array
     {
-        // 这里可能会携带 models/ 前缀，暂时去除一下
-        if (str_starts_with($model, 'models/')) {
-            $model = substr($model, strlen('models/'));
-        }
-
-        $config = [];
-
-        // Map thinking budget if present
-        if (isset($thinking['thinking_budget'])) {
-            if (str_starts_with($model, 'gemini-2')) {
-                $config['thinkingBudget'] = $thinking['thinking_budget'];
-            } else {
-                $level = $thinking['level'] ?? 'HIGH';
-                $level = strtoupper($level);
-                if (! in_array($level, ['HIGH', 'LOW'])) {
-                    $level = 'HIGH';
-                }
-                $config['includeThoughts'] = true;
-                $config['thinkingLevel'] = $level;
-            }
-        }
-
-        return $config;
+        return $thinking->toGeminiFormat($model);
     }
 }

@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Hyperf\Odin\Model;
 
 use Hyperf\Odin\Api\Request\ChatCompletionRequest;
+use Hyperf\Odin\Api\Request\ThinkingConfig;
 use Hyperf\Odin\Api\Response\ChatCompletionResponse;
 use Hyperf\Odin\Api\Response\ChatCompletionStreamResponse;
 use Hyperf\Odin\Contract\Api\ClientInterface;
@@ -64,12 +65,9 @@ class GeminiModel extends AbstractModel
     private function formatThinking(ChatCompletionRequest $request): void
     {
         $thinking = $request->getThinking();
-        if (! isset($thinking['thinking_budget'])) {
-            $thinking['thinking_budget'] = -1;
+        // 若未设置思考配置，使用默认启用配置（budgetTokens=-1 表示动态分配）
+        if ($thinking === null) {
+            $request->setThinking(ThinkingConfig::enabled());
         }
-        if (! isset($thinking['level'])) {
-            $thinking['level'] = 'HIGH';
-        }
-        $request->setThinking($thinking);
     }
 }

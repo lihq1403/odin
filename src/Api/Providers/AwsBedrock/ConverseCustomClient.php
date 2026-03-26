@@ -562,8 +562,9 @@ class ConverseCustomClient extends AbstractClient
             ];
         }
 
-        if (! empty($chatRequest->getThinking())) {
-            $requestBody['thinking'] = $chatRequest->getThinking();
+        $thinking = $chatRequest->getThinking();
+        if ($thinking !== null && $thinking->isEnabled()) {
+            $requestBody['thinking'] = $thinking->toBedrockFormat();
         }
 
         // Add tool support

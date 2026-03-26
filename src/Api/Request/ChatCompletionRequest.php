@@ -56,7 +56,7 @@ class ChatCompletionRequest implements RequestInterface
 
     private bool $streamIncludeUsage = false;
 
-    private ?array $thinking = null;
+    private ?ThinkingConfig $thinking = null;
 
     private array $optionKeyMaps = [];
 
@@ -139,8 +139,8 @@ class ChatCompletionRequest implements RequestInterface
                 'include_usage' => true,
             ];
         }
-        if (! empty($this->thinking)) {
-            $json['thinking'] = $this->thinking;
+        if ($this->thinking !== null && $this->thinking->isEnabled()) {
+            $json['thinking'] = $this->thinking->toBedrockFormat();
         }
 
         if (str_contains($this->model, 'minimax')) {
@@ -232,8 +232,16 @@ class ChatCompletionRequest implements RequestInterface
         $this->model = $model;
     }
 
-    public function setThinking(?array $thinking): void
+    /**
+     * 设置思考参数。
+     * 支持传入 ThinkingConfig 对象，或兼容旧版裸数组格式（内部自动转换）。
+     */
+    public function setThinking(array|ThinkingConfig|null $thinking): void
     {
+        if (is_array($thinking)) {
+            $this->thinking = ThinkingConfig::fromArray($thinking);
+            return;
+        }
         $this->thinking = $thinking;
     }
 
@@ -332,7 +340,7 @@ class ChatCompletionRequest implements RequestInterface
         return $this->stop;
     }
 
-    public function getThinking(): ?array
+    public function getThinking(): ?ThinkingConfig
     {
         return $this->thinking;
     }

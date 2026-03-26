@@ -235,8 +235,9 @@ class ConverseClient extends Client
             ];
         }
 
-        if (! empty($chatRequest->getThinking())) {
-            $requestBody['thinking'] = $chatRequest->getThinking();
+        $thinking = $chatRequest->getThinking();
+        if ($thinking !== null && $thinking->isEnabled()) {
+            $requestBody['thinking'] = $thinking->toBedrockFormat();
         }
 
         // 添加工具调用支持

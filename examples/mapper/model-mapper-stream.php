@@ -17,6 +17,8 @@ use Hyperf\Context\ApplicationContext;
 use Hyperf\Di\ClassLoader;
 use Hyperf\Di\Container;
 use Hyperf\Di\Definition\DefinitionSourceFactory;
+use Hyperf\Odin\Api\Request\ChatCompletionRequest;
+use Hyperf\Odin\Api\Request\ThinkingConfig;
 use Hyperf\Odin\Api\Response\ChatCompletionChoice;
 use Hyperf\Odin\Message\AssistantMessage;
 use Hyperf\Odin\Message\SystemMessage;
@@ -35,10 +37,12 @@ $model = $modelMapper->getModel($modelId);
 
 $messages = [
     new SystemMessage(''),
-    new UserMessage('你好，你是谁'),
+    new UserMessage('一个房间里有 100 人，其中 99 人是秃头。请问至少需要挑出多少人，才能保证里面有至少 2 个非秃头？'),
 ];
 
-$response = $model->chatStream($messages);
+$request = new ChatCompletionRequest($messages);
+$request->setThinking(ThinkingConfig::enabled(-1, 'low'));
+$response = $model->chatStreamWithRequest($request);
 
 // 使用流式API调用
 $start = microtime(true);
