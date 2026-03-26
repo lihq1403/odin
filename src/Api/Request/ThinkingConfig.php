@@ -151,11 +151,10 @@ class ThinkingConfig
             return ['thinkingBudget' => $budget];
         }
 
-        // gemini-3.x 及更新版本：仅需 thinkingLevel（小写）
-        $level = strtolower($this->level);
-        if (! in_array($level, ['high', 'medium', 'low'], true)) {
-            $level = 'low';
+        $level = strtoupper($this->level);
+        if (! in_array($level, ['HIGH', 'MEDIUM', 'LOW'], true)) {
+            $level = 'LOW';
         }
-        return ['thinkingLevel' => $level];
+        return ['includeThoughts' => true, 'thinkingLevel' => $level];
     }
 }
