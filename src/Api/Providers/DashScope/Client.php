@@ -51,6 +51,9 @@ class Client extends AbstractClient
 
             $options = $chatRequest->createOptions();
 
+            // 将通用 thinking 字段转换为千问格式（enable_thinking + thinking_budget）
+            $this->processThinkingConfig($chatRequest, $options);
+
             // 处理缓存点转换并决定是否添加缓存控制头部
             $hasCachePoints = $this->processCachePoints($chatRequest, $options);
 
@@ -95,6 +98,10 @@ class Client extends AbstractClient
         $this->cachePointManager->configureCachePoints($chatRequest);
 
         $options = $chatRequest->createOptions();
+
+        // 将通用 thinking 字段转换为千问格式（enable_thinking + thinking_budget）
+        $this->processThinkingConfig($chatRequest, $options);
+
         $hasCachePoints = $this->processCachePoints($chatRequest, $options);
 
         $url = $this->buildChatCompletionsUrl();
@@ -170,6 +177,27 @@ class Client extends AbstractClient
     protected function buildCompletionsUrl(): string
     {
         return $this->getBaseUri() . '/completions';
+    }
+
+    /**
+     * 将通用 thinking 字段替换为千问原生格式。
+     *
+     * createOptions() 生成的是 Bedrock 格式（json.thinking.type/budget_tokens），
+     * 千问需要顶层扁平字段 enable_thinking + thinking_budget，此方法完成替换。
+     */
+    private function processThinkingConfig(ChatCompletionRequest $request, array &$options): void
+    {
+        // 移除 createOptions() 写入的 Bedrock 格式 thinking 字段
+        unset($options['json']['thinking']);
+
+        $thinking = $request->getThinking();
+        if ($thinking === null) {
+            return;
+        }
+
+        foreach ($thinking->toQwenFormat() as $key => $value) {
+            $options['json'][$key] = $value;
+        }
     }
 
     /**
