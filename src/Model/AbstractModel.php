@@ -15,6 +15,7 @@ namespace Hyperf\Odin\Model;
 use Hyperf\Odin\Api\Request\ChatCompletionRequest;
 use Hyperf\Odin\Api\Request\CompletionRequest;
 use Hyperf\Odin\Api\Request\EmbeddingRequest;
+use Hyperf\Odin\Api\Request\ThinkingConfig;
 use Hyperf\Odin\Api\RequestOptions\ApiOptions;
 use Hyperf\Odin\Api\Response\ChatCompletionResponse;
 use Hyperf\Odin\Api\Response\ChatCompletionStreamResponse;
@@ -91,6 +92,7 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
             $this->checkFunctionCallSupport($request->getTools());
             $this->checkMultiModalSupport($request->getMessages());
             $this->checkFixedTemperature($request);
+            $this->applyThinkingBudgetFromOptions($request);
 
             // 验证请求参数（包括消息序列）
             $request->validate();
@@ -117,6 +119,7 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
             $this->checkFunctionCallSupport($request->getTools());
             $this->checkMultiModalSupport($request->getMessages());
             $this->checkFixedTemperature($request);
+            $this->applyThinkingBudgetFromOptions($request);
 
             // 验证请求参数（包括消息序列）
             $request->validate();
@@ -444,6 +447,37 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
         }
         if (! $request->getTemperature() && $this->modelOptions->getDefaultTemperature()) {
             $request->setTemperature($this->modelOptions->getDefaultTemperature());
+        }
+    }
+
+    /**
+     * 根据 model_options 的 thinking_budget_levels 配置自动补充思考预算：.
+     *
+     * 若请求已启用 ThinkingConfig 且带有 level 但无有效 budget（null 或 -1），
+     * 从 thinking_budget_levels[level] 查找对应预算并重建 ThinkingConfig。
+     * 未配置 thinking_budget_levels 或请求已有明确 budget 时不做任何处理。
+     */
+    private function applyThinkingBudgetFromOptions(ChatCompletionRequest $request): void
+    {
+        $existingThinking = $request->getThinking();
+        if ($existingThinking === null || ! $existingThinking->isEnabled()) {
+            return;
+        }
+
+        $levels = $this->modelOptions->getThinkingBudgetLevels();
+        if (empty($levels)) {
+            return;
+        }
+
+        $currentBudget = $existingThinking->getBudgetTokens();
+        // 仅在没有有效预算时（null 或 -1），才用 level 映射表补充
+        if ($currentBudget !== null && $currentBudget !== -1) {
+            return;
+        }
+
+        $level = $existingThinking->getLevel();
+        if (isset($levels[$level])) {
+            $request->setThinking(ThinkingConfig::enabled($levels[$level], $level));
         }
     }
 
