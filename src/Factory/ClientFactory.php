@@ -29,6 +29,7 @@ use Hyperf\Odin\Api\Providers\Gemini\GeminiConfig;
 use Hyperf\Odin\Api\Providers\Gemini\ServiceAccountConfig;
 use Hyperf\Odin\Api\Providers\OpenAI\OpenAI;
 use Hyperf\Odin\Api\Providers\OpenAI\OpenAIConfig;
+use Hyperf\Odin\Api\Providers\Volcengine\VolcengineArk;
 use Hyperf\Odin\Api\RequestOptions\ApiOptions;
 use Hyperf\Odin\Contract\Api\ClientInterface;
 use InvalidArgumentException;
@@ -56,6 +57,22 @@ class ClientFactory
 
         // 创建客户端
         return $openAI->getClient($clientConfig, $apiOptions, $logger);
+    }
+
+    /**
+     * 创建火山方舟客户端.
+     *
+     * @param array $config 配置参数
+     * @param null|ApiOptions $apiOptions API请求选项
+     * @param null|LoggerInterface $logger 日志记录器
+     */
+    public static function createVolcengineArkClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
+    {
+        $clientConfig = OpenAIConfig::fromArray($config);
+
+        $volcengineArk = new VolcengineArk();
+
+        return $volcengineArk->getClient($clientConfig, $apiOptions, $logger);
     }
 
     /**
