@@ -12,6 +12,8 @@ declare(strict_types=1);
 
 namespace Hyperf\Odin\Factory;
 
+use Hyperf\Odin\Api\Providers\Anthropic\Anthropic;
+use Hyperf\Odin\Api\Providers\Anthropic\AnthropicConfig;
 use Hyperf\Odin\Api\Providers\AwsBedrock\AwsBedrock;
 use Hyperf\Odin\Api\Providers\AwsBedrock\AwsBedrockConfig;
 use Hyperf\Odin\Api\Providers\AwsBedrock\AwsType;
@@ -291,9 +293,29 @@ class ClientFactory
     }
 
     /**
+     * 创建 Anthropic 客户端.
+     *
+     * @param array $config 配置参数
+     * @param null|ApiOptions $apiOptions API请求选项
+     * @param null|LoggerInterface $logger 日志记录器
+     */
+    public static function createAnthropicClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
+    {
+        $clientConfig = AnthropicConfig::fromArray($config);
+
+        if ($apiOptions === null) {
+            $apiOptions = new ApiOptions();
+        }
+
+        $anthropic = new Anthropic();
+
+        return $anthropic->getClient($clientConfig, $apiOptions, $logger);
+    }
+
+    /**
      * 根据提供商类型创建客户端.
      *
-     * @param string $provider 提供商类型 (openai, azure_openai, aws_bedrock, dashscope, gemini)
+     * @param string $provider 提供商类型 (openai, azure_openai, aws_bedrock, dashscope, gemini, deepseek, anthropic)
      * @param array $config 配置参数
      * @param null|ApiOptions $apiOptions API请求选项
      * @param null|LoggerInterface $logger 日志记录器
@@ -310,6 +332,7 @@ class ClientFactory
             'dashscope' => self::createDashScopeClient($config, $apiOptions, $logger),
             'gemini' => self::createGeminiClient($config, $apiOptions, $logger),
             'deepseek' => self::createDeepSeekClient($config, $apiOptions, $logger),
+            'anthropic' => self::createAnthropicClient($config, $apiOptions, $logger),
             default => throw new InvalidArgumentException(sprintf('Unsupported provider: %s', $provider)),
         };
     }
