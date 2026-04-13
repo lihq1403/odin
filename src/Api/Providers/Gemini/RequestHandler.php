@@ -361,9 +361,13 @@ class RequestHandler
         $content = $message->getContent();
         $result = json_decode($content, true);
 
-        // If not valid JSON, wrap it
-        if ($result === null) {
-            $result = ['result' => $content];
+        // Gemini's functionResponse.response must be a JSON object (Struct), not an array or scalar.
+        // - Invalid JSON (null) → wrap with original content string
+        // - JSON array ([...]) → array_is_list returns true → wrap to avoid "cannot start list" error
+        // - Scalar (string/int/bool decoded from JSON) → wrap it
+        // - Associative array → fine, encodes as JSON object
+        if (! is_array($result) || array_is_list($result)) {
+            $result = ['result' => $result ?? $content];
         }
 
         // Get tool name - Gemini requires it to be non-empty
