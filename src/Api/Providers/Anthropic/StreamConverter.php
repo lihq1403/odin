@@ -61,6 +61,21 @@ class StreamConverter implements IteratorAggregate
 
     private string $currentToolCallName = '';
 
+    /**
+     * message_start 事件中记录的输入 token 数.
+     */
+    private int $inputTokens = 0;
+
+    /**
+     * message_start 事件中记录的缓存写入 token 数.
+     */
+    private int $cacheCreationTokens = 0;
+
+    /**
+     * message_start 事件中记录的缓存读取 token 数.
+     */
+    private int $cacheReadTokens = 0;
+
     public function __construct(ResponseInterface $response, ?LoggerInterface $logger = null)
     {
         $this->response = $response;
@@ -150,13 +165,19 @@ class StreamConverter implements IteratorAggregate
     }
 
     /**
-     * 处理 message_start 事件：输出初始 delta（role: assistant）.
+     * 处理 message_start 事件：输出初始 delta（role: assistant），同时记录 prompt token 数据.
      */
     private function handleMessageStart(array $event, int $created): string
     {
         $message = $event['message'] ?? [];
         $this->messageId = $message['id'] ?? ('anthropic-' . uniqid());
         $this->model = $message['model'] ?? '';
+
+        // 记录 prompt 侧 usage（input_tokens 及缓存相关）
+        $usage = $message['usage'] ?? [];
+        $this->inputTokens = (int) ($usage['input_tokens'] ?? 0);
+        $this->cacheCreationTokens = (int) ($usage['cache_creation_input_tokens'] ?? 0);
+        $this->cacheReadTokens = (int) ($usage['cache_read_input_tokens'] ?? 0);
 
         return $this->formatChunk($created, [
             'role' => 'assistant',
@@ -256,8 +277,10 @@ class StreamConverter implements IteratorAggregate
         $stopReason = $delta['stop_reason'] ?? 'end_turn';
         $finishReason = $this->convertStopReason($stopReason);
 
-        // usage 统计（与 ResponseConverter 保持一致的字段映射）
+        // usage 统计（与 ResponseConverter::convertUsage 保持一致的字段映射）
         $outputTokens = (int) ($usage['output_tokens'] ?? 0);
+        $promptTokens = $this->inputTokens + $this->cacheCreationTokens + $this->cacheReadTokens;
+        $totalTokens = $promptTokens + $outputTokens;
 
         $chunk = [
             'id' => $this->messageId ?: ('anthropic-' . uniqid()),
@@ -273,12 +296,27 @@ class StreamConverter implements IteratorAggregate
             ],
         ];
 
-        if ($outputTokens > 0) {
-            $chunk['usage'] = [
-                'prompt_tokens' => 0,
+        if ($outputTokens > 0 || $promptTokens > 0) {
+            $usageData = [
+                'prompt_tokens' => $promptTokens,
                 'completion_tokens' => $outputTokens,
-                'total_tokens' => $outputTokens,
+                'total_tokens' => $totalTokens,
             ];
+
+            // 缓存详情
+            $promptTokensDetails = [];
+            if ($this->cacheReadTokens > 0) {
+                $promptTokensDetails['cached_tokens'] = $this->cacheReadTokens;
+                $promptTokensDetails['cache_read_input_tokens'] = $this->cacheReadTokens;
+            }
+            if ($this->cacheCreationTokens > 0) {
+                $promptTokensDetails['cache_write_input_tokens'] = $this->cacheCreationTokens;
+            }
+            if (! empty($promptTokensDetails)) {
+                $usageData['prompt_tokens_details'] = $promptTokensDetails;
+            }
+
+            $chunk['usage'] = $usageData;
         }
 
         return json_encode($chunk, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
