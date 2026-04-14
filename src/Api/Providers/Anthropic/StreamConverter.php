@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Hyperf\Odin\Api\Providers\Anthropic;
 
 use Generator;
+use Hyperf\Odin\Utils\StreamChunkParseFailureContext;
 use IteratorAggregate;
 use JsonException;
 use Psr\Http\Message\ResponseInterface;
@@ -130,10 +131,9 @@ class StreamConverter implements IteratorAggregate
                     try {
                         $event = json_decode($data, true, 512, JSON_THROW_ON_ERROR);
                     } catch (JsonException $e) {
-                        $this->logger?->warning('AnthropicStreamJsonDecodeError', [
-                            'error' => $e->getMessage(),
-                            'line' => substr($data, 0, 200),
-                        ]);
+                        $this->logger?->warning('AnthropicStreamJsonDecodeError', array_merge([
+                            'model' => $this->model,
+                        ], StreamChunkParseFailureContext::forRawLine($data, $e->getMessage())));
                         continue;
                     }
 

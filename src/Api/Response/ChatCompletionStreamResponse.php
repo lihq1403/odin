@@ -22,6 +22,7 @@ use Hyperf\Odin\Exception\LLMException;
 use Hyperf\Odin\Message\AssistantMessage;
 use Hyperf\Odin\Utils\EventUtil;
 use Hyperf\Odin\Utils\LoggingConfigHelper;
+use Hyperf\Odin\Utils\StreamChunkParseFailureContext;
 use Hyperf\Odin\Utils\TimeUtil;
 use IteratorAggregate;
 use JsonException;
@@ -225,14 +226,18 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
                     try {
                         $data = json_decode($data, true, 512, JSON_THROW_ON_ERROR);
                     } catch (JsonException $e) {
-                        $this->logger?->warning('InvalidJsonInStream', ['data' => $data, 'error' => $e->getMessage()]);
+                        $this->logger?->warning('InvalidJsonInStream', array_merge([
+                            'chunk_count' => $chunkCount,
+                        ], StreamChunkParseFailureContext::forRawLine($data, $e->getMessage())));
                         continue;
                     }
                 }
 
                 // 确保数据是有效的数组
                 if (! is_array($data)) {
-                    $this->logger?->warning('InvalidDataFormat', ['data' => $data, 'chunk_count' => $chunkCount]);
+                    $this->logger?->warning('InvalidDataFormat', array_merge([
+                        'chunk_count' => $chunkCount,
+                    ], StreamChunkParseFailureContext::forInvalidChunkShape($data)));
                     continue;
                 }
 
@@ -344,7 +349,9 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
 
                 // 确保数据是有效的数组
                 if (! is_array($data)) {
-                    $this->logger?->warning('InvalidDataFormat', ['data' => $data, 'chunk_count' => $chunkCount]);
+                    $this->logger?->warning('InvalidDataFormat', array_merge([
+                        'chunk_count' => $chunkCount,
+                    ], StreamChunkParseFailureContext::forInvalidChunkShape($data)));
                     continue;
                 }
 
@@ -562,7 +569,10 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
                     $this->updateMetadata($data);
                     yield from $this->yieldChoices($data['choices'] ?? []);
                 } catch (JsonException $e) {
-                    $this->logger?->warning('InvalidJsonResponse', ['line' => $line, 'error' => $e->getMessage(), 'chunk_count' => $chunkCount]);
+                    $rawForLog = trim($line);
+                    $this->logger?->warning('InvalidJsonResponse', array_merge([
+                        'chunk_count' => $chunkCount,
+                    ], StreamChunkParseFailureContext::forRawLine($rawForLog, $e->getMessage())));
                     continue;
                 }
             }

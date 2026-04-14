@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Hyperf\Odin\Api\Providers\Gemini;
 
 use Generator;
+use Hyperf\Odin\Utils\StreamChunkParseFailureContext;
 use IteratorAggregate;
 use JsonException;
 use Psr\Http\Message\ResponseInterface;
@@ -157,10 +158,9 @@ class StreamConverter implements IteratorAggregate
                         yield $openAIChunk;
                     }
                 } catch (JsonException $e) {
-                    $this->logger?->warning('GeminiStreamJsonDecodeError', [
-                        'error' => $e->getMessage(),
-                        'line' => substr($line, 0, 200),
-                    ]);
+                    $this->logger?->warning('GeminiStreamJsonDecodeError', array_merge([
+                        'model' => $this->model,
+                    ], StreamChunkParseFailureContext::forRawLine($line, $e->getMessage())));
                     continue;
                 }
             }
