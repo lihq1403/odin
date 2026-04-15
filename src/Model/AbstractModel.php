@@ -31,6 +31,7 @@ use Hyperf\Odin\Exception\LLMException\LLMNetworkException;
 use Hyperf\Odin\Exception\LLMException\Model\LLMEmbeddingNotSupportedException;
 use Hyperf\Odin\Exception\LLMException\Model\LLMFunctionCallNotSupportedException;
 use Hyperf\Odin\Exception\LLMException\Model\LLMModalityNotSupportedException;
+use Hyperf\Odin\Exception\OdinException;
 use Hyperf\Odin\Message\AssistantMessage;
 use Hyperf\Odin\Message\UserMessage;
 use Hyperf\Retry\Retry;
@@ -433,9 +434,16 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
                 }
 
                 $throwable = $context->lastThrowable;
-                // 只有网络异常才重试
-                return $throwable instanceof LLMNetworkException
-                    || ($throwable && $throwable->getPrevious() instanceof LLMNetworkException);
+                // 网络异常重试
+                if ($throwable instanceof LLMNetworkException
+                    || ($throwable && $throwable->getPrevious() instanceof LLMNetworkException)) {
+                    return true;
+                }
+                // statusCode >= 500 的异常也可重试（服务端错误）
+                if ($throwable instanceof OdinException && $throwable->getStatusCode() >= 500) {
+                    return true;
+                }
+                return false;
             })
             ->call($callable);
     }
@@ -489,7 +497,7 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
         /** @var AssistantMessage $message */
         $message = $response->getFirstChoice()?->getMessage();
         if (! $message instanceof AssistantMessage) {
-            throw new LLMModelException('Model returned empty content response');
+            throw new LLMModelException('Model returned empty content response.', statusCode: 500);
         }
         if ($message->hasToolCalls()) {
             return;
@@ -500,7 +508,7 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
         }
         $content = $message->getContent();
         if ($content === '' || trim($content) === '') {
-            throw new LLMModelException('Model returned empty content response');
+            throw new LLMModelException('Model returned empty content response', statusCode: 500);
         }
     }
 }

@@ -60,7 +60,7 @@ class AwsBedrockFormatConverter implements IteratorAggregate
     {
         $body = $result->get('body');
         if (! $body instanceof EventParsingIterator) {
-            throw new LLMModelException('Invalid response stream');
+            throw new LLMModelException('Invalid response stream', statusCode: 500);
         }
         $this->responseStream = $result->get('body');
 
