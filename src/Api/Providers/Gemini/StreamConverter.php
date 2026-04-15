@@ -337,10 +337,10 @@ class StreamConverter implements IteratorAggregate
     private function convertUsage(array $usageMetadata): array
     {
         // Gemini format:
-        // - promptTokenCount: tokens from new input (not from cache)
-        // - cachedContentTokenCount: tokens read from cache
+        // - promptTokenCount: total prompt tokens (including cached tokens)
+        // - cachedContentTokenCount: tokens served from cache (subset of promptTokenCount)
         $cacheReadTokens = $usageMetadata['cachedContentTokenCount'] ?? 0;
-        $inputTokens = $usageMetadata['promptTokenCount'] ?? 0 - $cacheReadTokens;
+        $inputTokens = ($usageMetadata['promptTokenCount'] ?? 0) - $cacheReadTokens;
 
         // 如果有 $cacheWriteTokens，代表是第一次写入，那么本次虽然会读取到缓存但是不计入读取量
         if ($this->cacheWriteTokens > 0) {
