@@ -13,11 +13,8 @@ declare(strict_types=1);
 namespace Hyperf\Odin\Api\Providers\Anthropic;
 
 use Generator;
-use Hyperf\Odin\Utils\StreamChunkParseFailureContext;
+use Hyperf\Odin\Api\Transport\SseEventProducerInterface;
 use IteratorAggregate;
-use JsonException;
-use Psr\Http\Message\ResponseInterface;
-use Psr\Log\LoggerInterface;
 use Traversable;
 
 /**
@@ -36,9 +33,7 @@ use Traversable;
  */
 class StreamConverter implements IteratorAggregate
 {
-    private ResponseInterface $response;
-
-    private ?LoggerInterface $logger;
+    private SseEventProducerInterface $sseProducer;
 
     /**
      * 当前消息 ID（从 message_start 事件中获取）.
@@ -77,10 +72,9 @@ class StreamConverter implements IteratorAggregate
      */
     private int $cacheReadTokens = 0;
 
-    public function __construct(ResponseInterface $response, ?LoggerInterface $logger = null)
+    public function __construct(SseEventProducerInterface $sseProducer)
     {
-        $this->response = $response;
-        $this->logger = $logger;
+        $this->sseProducer = $sseProducer;
     }
 
     public function getIterator(): Traversable
@@ -89,59 +83,26 @@ class StreamConverter implements IteratorAggregate
     }
 
     /**
-     * 解析 SSE 流并转换为 OpenAI 格式的 chunk 字符串.
+     * 迭代 SSE 事件并转换为 OpenAI 格式的 chunk 字符串.
+     *
+     * SSE 字节读取与解析由 SseEventProducerInterface（SwowSSEClient / SSEClient）负责，
+     * 此处只做 Anthropic 事件语义 -> OpenAI chunk 格式的转换。
      */
     private function parseStream(): Generator
     {
-        $stream = $this->response->getBody();
-        $buffer = '';
         $created = time();
 
-        while (! $stream->eof()) {
-            $chunk = $stream->read(8192);
-            if ($chunk === '') {
+        foreach ($this->sseProducer->getIterator() as $event) {
+            $data = $event->getData();
+
+            // SSEClient / SwowSSEClient 已完成 JSON 解码，非 array 表示无效或结束事件
+            if (! is_array($data)) {
                 continue;
             }
 
-            $buffer .= $chunk;
-
-            // 按行解析 SSE
-            while (($pos = strpos($buffer, "\n")) !== false) {
-                $line = substr($buffer, 0, $pos);
-                $buffer = substr($buffer, $pos + 1);
-
-                $line = trim($line);
-                if ($line === '') {
-                    continue;
-                }
-
-                // 跳过 event: 行（Anthropic SSE 包含 event 字段，只关注 data 字段）
-                if (str_starts_with($line, 'event:')) {
-                    continue;
-                }
-
-                // 处理 data: 行
-                if (str_starts_with($line, 'data:')) {
-                    $data = trim(substr($line, 5));
-
-                    if ($data === '[DONE]') {
-                        return;
-                    }
-
-                    try {
-                        $event = json_decode($data, true, 512, JSON_THROW_ON_ERROR);
-                    } catch (JsonException $e) {
-                        $this->logger?->warning('AnthropicStreamJsonDecodeError', array_merge([
-                            'model' => $this->model,
-                        ], StreamChunkParseFailureContext::forRawLine($data, $e->getMessage())));
-                        continue;
-                    }
-
-                    $openAIChunk = $this->processEvent($event, $created);
-                    if ($openAIChunk !== null) {
-                        yield $openAIChunk;
-                    }
-                }
+            $openAIChunk = $this->processEvent($data, $created);
+            if ($openAIChunk !== null) {
+                yield $openAIChunk;
             }
         }
     }

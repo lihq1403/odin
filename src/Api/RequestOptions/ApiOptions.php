@@ -66,6 +66,13 @@ class ApiOptions
     protected bool $useSwowTransport = false;
 
     /**
+     * SSE 流每次 read 的字节数（buffer size）.
+     *
+     * @var int 单位：字节
+     */
+    protected int $bufferSize = 8192;
+
+    /**
      * 构造函数.
      *
      * @param array $options 配置选项
@@ -99,6 +106,10 @@ class ApiOptions
         if (isset($options['use_swow_transport'])) {
             $this->useSwowTransport = (bool) $options['use_swow_transport'];
         }
+
+        if (isset($options['buffer_size']) && is_int($options['buffer_size']) && $options['buffer_size'] > 0) {
+            $this->bufferSize = $options['buffer_size'];
+        }
     }
 
     /**
@@ -122,6 +133,7 @@ class ApiOptions
             'logging' => $this->logging,
             'network_retry_count' => $this->networkRetryCount,
             'use_swow_transport' => $this->useSwowTransport,
+            'buffer_size' => $this->bufferSize,
         ];
     }
 
@@ -339,6 +351,23 @@ class ApiOptions
     public function setUseSwowTransport(bool $useSwowTransport): self
     {
         $this->useSwowTransport = $useSwowTransport;
+        return $this;
+    }
+
+    /**
+     * 获取 SSE 流 read buffer size（字节）.
+     */
+    public function getBufferSize(): int
+    {
+        return $this->bufferSize;
+    }
+
+    /**
+     * 设置 SSE 流 read buffer size（字节）.
+     */
+    public function setBufferSize(int $bufferSize): self
+    {
+        $this->bufferSize = max(1, $bufferSize);
         return $this;
     }
 }

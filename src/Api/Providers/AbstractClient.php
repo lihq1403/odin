@@ -25,6 +25,7 @@ use Hyperf\Odin\Api\Response\EmbeddingResponse;
 use Hyperf\Odin\Api\Response\TextCompletionResponse;
 use Hyperf\Odin\Api\Transport\OdinSimpleCurl;
 use Hyperf\Odin\Api\Transport\SSEClient;
+use Hyperf\Odin\Api\Transport\SseEventProducerInterface;
 use Hyperf\Odin\Api\Transport\SwowSSEClient;
 use Hyperf\Odin\Contract\Api\ClientInterface;
 use Hyperf\Odin\Contract\Api\ConfigInterface;
@@ -40,7 +41,6 @@ use Hyperf\Odin\Utils\LoggingConfigHelper;
 use Hyperf\Odin\Utils\LogUtil;
 use Hyperf\Odin\Utils\ProxyUtil;
 use Hyperf\Odin\Utils\TimeUtil;
-use IteratorAggregate;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Log\LoggerInterface;
 use Throwable;
@@ -241,7 +241,14 @@ abstract class AbstractClient implements ClientInterface
                 && $swowCanHandleProxy
             ) {
                 $body = json_encode($options['json'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                $response = SwowSSEClient::buildSwowResponse($url, $options['headers'] ?? [], (string) $body, $proxyUrl);
+                $response = SwowSSEClient::buildSwowResponse(
+                    $url,
+                    $options['headers'] ?? [],
+                    (string) $body,
+                    $proxyUrl,
+                    (int) ($this->requestOptions->getConnectionTimeout() * 1000),
+                    (int) ($this->requestOptions->getStreamFirstChunkTimeout() * 1000),
+                );
                 return [
                     'response' => $response,
                     'duration' => $this->calculateDuration($startTime),
@@ -289,16 +296,15 @@ abstract class AbstractClient implements ClientInterface
      *
      * - swow：使用 SwowSSEClient（基于 Psr7::readEventStream，无需 detach）
      * - 其他：使用 SSEClient（基于 fread，需要 detach 获取原始 stream resource）
-     *
-     * @return IteratorAggregate<int, mixed>
      */
-    protected function buildSSEIterator(ResponseInterface $response, string $transport): IteratorAggregate
+    protected function buildSSEIterator(ResponseInterface $response, string $transport): SseEventProducerInterface
     {
         if ($transport === 'swow') {
             return new SwowSSEClient(
                 $response,
                 $this->requestOptions->getTimeout(),
-                $this->logger
+                $this->logger,
+                $this->requestOptions->getBufferSize(),
             );
         }
 
@@ -307,7 +313,7 @@ abstract class AbstractClient implements ClientInterface
             $stream,
             true,
             $this->requestOptions->getTimeout(),
-            $this->logger
+            $this->logger,
         );
     }
 

@@ -114,6 +114,16 @@ if ($isStream) {
                 }
                 echo $content;
             }
+
+            foreach ($message->getToolCalls() as $toolCall) {
+                if ($toolCall->getName()) {
+                    echo PHP_EOL . '--- Tool Call ---' . PHP_EOL;
+                    echo 'Name: ' . $toolCall->getName() . PHP_EOL;
+                }
+                if ($toolCall->getStreamArguments()) {
+                    echo $toolCall->getStreamArguments();
+                }
+            }
         }
     }
 

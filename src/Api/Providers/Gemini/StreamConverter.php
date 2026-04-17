@@ -13,10 +13,8 @@ declare(strict_types=1);
 namespace Hyperf\Odin\Api\Providers\Gemini;
 
 use Generator;
-use Hyperf\Odin\Utils\StreamChunkParseFailureContext;
+use Hyperf\Odin\Api\Transport\SseEventProducerInterface;
 use IteratorAggregate;
-use JsonException;
-use Psr\Http\Message\ResponseInterface;
 use Psr\Log\LoggerInterface;
 use stdClass;
 use Traversable;
@@ -26,7 +24,7 @@ use Traversable;
  */
 class StreamConverter implements IteratorAggregate
 {
-    private ResponseInterface $response;
+    private SseEventProducerInterface $sseProducer;
 
     private ?LoggerInterface $logger;
 
@@ -81,13 +79,13 @@ class StreamConverter implements IteratorAggregate
     private string $contextHash;
 
     public function __construct(
-        ResponseInterface $response,
+        SseEventProducerInterface $sseProducer,
         ?LoggerInterface $logger,
         string $model,
         int $cacheWriteTokens = 0,
         string $contextHash = ''
     ) {
-        $this->response = $response;
+        $this->sseProducer = $sseProducer;
         $this->logger = $logger;
         $this->model = $model;
         $this->cacheWriteTokens = $cacheWriteTokens;
@@ -107,62 +105,22 @@ class StreamConverter implements IteratorAggregate
      */
     private function parseStream(): Generator
     {
-        $stream = $this->response->getBody();
-        $buffer = '';
         $chunkCount = 0;
 
         $this->logger?->info('GeminiStreamProcessingStarted', [
             'model' => $this->model,
         ]);
 
-        while (! $stream->eof()) {
-            $chunk = $stream->read(8192);
-            if ($chunk === '') {
+        foreach ($this->sseProducer->getIterator() as $event) {
+            $geminiChunk = $event->getData();
+            if (! is_array($geminiChunk)) {
                 continue;
             }
 
-            $buffer .= $chunk;
-
-            // Process complete JSON objects in buffer
-            while (($pos = strpos($buffer, "\n")) !== false) {
-                $line = substr($buffer, 0, $pos);
-                $buffer = substr($buffer, $pos + 1);
-
-                // Skip empty lines
-                $line = trim($line);
-                if ($line === '') {
-                    continue;
-                }
-
-                // Remove data: prefix if present (SSE format)
-                if (str_starts_with($line, 'data: ')) {
-                    $line = substr($line, 6);
-                }
-
-                // Check for done signal
-                if ($line === '[DONE]') {
-                    $this->logger?->info('GeminiStreamCompleted', [
-                        'total_chunks' => $chunkCount,
-                    ]);
-                    break 2;
-                }
-
-                try {
-                    $geminiChunk = json_decode($line, true, 512, JSON_THROW_ON_ERROR);
-
-                    // Convert Gemini chunk to OpenAI format
-                    $openAIChunk = $this->convertStreamChunk($geminiChunk);
-
-                    if ($openAIChunk !== null) {
-                        ++$chunkCount;
-                        yield $openAIChunk;
-                    }
-                } catch (JsonException $e) {
-                    $this->logger?->warning('GeminiStreamJsonDecodeError', array_merge([
-                        'model' => $this->model,
-                    ], StreamChunkParseFailureContext::forRawLine($line, $e->getMessage())));
-                    continue;
-                }
+            $openAIChunk = $this->convertStreamChunk($geminiChunk);
+            if ($openAIChunk !== null) {
+                ++$chunkCount;
+                yield $openAIChunk;
             }
         }
 

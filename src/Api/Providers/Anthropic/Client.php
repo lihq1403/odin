@@ -126,7 +126,9 @@ class Client extends AbstractClient
             ['response' => $response, 'duration' => $firstResponseDuration, 'transport' => $transport]
                 = $this->sendRawStreamRequest($url, $options, $startTime);
 
-            $streamConverter = new StreamConverter($response, $this->logger);
+            // buildSSEIterator 根据传输方式选择 SwowSSEClient / SSEClient，统一产出 SSEEvent
+            $sseProducer = $this->buildSSEIterator($response, $transport);
+            $streamConverter = new StreamConverter($sseProducer);
 
             $chatCompletionStreamResponse = new ChatCompletionStreamResponse(
                 logger: $this->logger,
