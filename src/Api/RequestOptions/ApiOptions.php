@@ -214,6 +214,21 @@ class ApiOptions
     }
 
     /**
+     * 获取 Swow 流式 HTTP 单次 recv 等待上限（秒）.
+     *
+     * Swow MagicClient::setRecvMessageTimeout 在分块/SSE 读路径上会作用于多次「等下一截数据」，
+     * 若仅传入 stream_first，则两块之间的空闲也会被限制在 stream_first 内，与 stream_chunk 语义冲突。
+     * 此处取 stream_first 与 stream_chunk 的较大值，使底层读等待与二者中较宽松的一方对齐。
+     *
+     * 副作用：当 stream_chunk 大于 stream_first 时，首包阶段同样可能等待至 stream_chunk 秒才触发底层超时
+     * （首包「快失败」仅由更上层的 stream_first / thinking 检测约束，Swow 单旋钮无法同时收紧首包又放宽块间）。
+     */
+    public function getSwowStreamRecvTimeoutSeconds(): float
+    {
+        return max($this->getStreamFirstChunkTimeout(), $this->getStreamChunkTimeout());
+    }
+
+    /**
      * 获取流式响应总体超时.
      */
     public function getStreamTotalTimeout(): float

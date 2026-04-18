@@ -241,13 +241,12 @@ abstract class AbstractClient implements ClientInterface
                 && $swowCanHandleProxy
             ) {
                 $body = json_encode($options['json'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                $response = SwowSSEClient::buildSwowResponse(
+                $response = SwowSSEClient::buildSwowResponseFromApiOptions(
                     $url,
                     $options['headers'] ?? [],
                     (string) $body,
                     $proxyUrl,
-                    (int) ($this->requestOptions->getConnectionTimeout() * 1000),
-                    (int) ($this->requestOptions->getStreamFirstChunkTimeout() * 1000),
+                    $this->requestOptions,
                 );
                 return [
                     'response' => $response,
