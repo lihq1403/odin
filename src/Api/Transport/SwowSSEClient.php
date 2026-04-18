@@ -20,7 +20,6 @@ use Hyperf\Odin\Exception\LLMException\LLMNetworkException;
 use Hyperf\Odin\Exception\RuntimeException;
 use Hyperf\Odin\Utils\LogUtil;
 use Hyperf\Odin\Utils\ProxyUtil;
-use IteratorAggregate;
 use JsonException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Log\LoggerInterface;
@@ -39,7 +38,6 @@ use Throwable;
  * 使用方式（有 ApiOptions 时优先用封装方法，避免 recv 毫秒与流式配置不一致）：
  *   $response = SwowSSEClient::buildSwowResponseFromApiOptions($url, $headers, $body, $proxyUrl, $apiOptions);
  *   $client   = new SwowSSEClient($response, $timeoutConfig, $logger);
- *
  */
 class SwowSSEClient implements SseEventProducerInterface
 {
@@ -113,8 +111,8 @@ class SwowSSEClient implements SseEventProducerInterface
      * @param null|string $proxyUrl 代理 URL（与 ApiOptions::getProxy() 同源）；为 null 时直连
      * @param null|int $connectTimeoutMs TCP 连接超时（毫秒），null 表示不限制
      * @param null|int $recvTimeoutMs MagicClient 接收消息超时（毫秒），null 表示不设置；在分块/SSE 读时
-     *                               往往作用于多次「等下一截数据」。建议用 ApiOptions::getSwowStreamRecvTimeoutSeconds()
-     *                               （stream_first 与 stream_chunk 取较大值），避免块间空闲被首包超时误伤。
+     *                                往往作用于多次「等下一截数据」。建议用 ApiOptions::getSwowStreamRecvTimeoutSeconds()
+     *                                （stream_first 与 stream_chunk 取较大值），避免块间空闲被首包超时误伤。
      * @throws LLMNetworkException
      * @throws LLMApiException
      * @throws LLMInvalidRequestException
