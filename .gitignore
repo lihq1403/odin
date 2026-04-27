@@ -19,3 +19,4 @@ publish/
 config/
 .obsidian/
 examples/mapper/request.json
+examples/debug/*

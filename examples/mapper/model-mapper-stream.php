@@ -41,7 +41,7 @@ $messages = [
 ];
 
 $request = new ChatCompletionRequest($messages);
-$request->setThinking(ThinkingConfig::enabled(-1, 'low'));
+$request->setThinking(ThinkingConfig::enabled());
 $response = $model->chatStreamWithRequest($request);
 
 // 使用流式API调用

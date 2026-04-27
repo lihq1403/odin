@@ -172,6 +172,46 @@ class ThinkingConfigTest extends TestCase
     }
 
     // -----------------------------------------------------------------------
+    // toQwenFormat
+    // -----------------------------------------------------------------------
+
+    public function testToQwenFormatEnabled(): void
+    {
+        $config = ThinkingConfig::enabled(8000);
+        $format = $config->toQwenFormat();
+
+        $this->assertSame(['enable_thinking' => true, 'thinking_budget' => 8000], $format);
+    }
+
+    public function testToQwenFormatEnabledWithoutBudgetOmitsBudgetField(): void
+    {
+        // budgetTokens 为 null 时不下发 thinking_budget，由模型使用默认值
+        $config = ThinkingConfig::fromArray(['type' => 'enabled']);
+        $format = $config->toQwenFormat();
+
+        $this->assertSame(['enable_thinking' => true], $format);
+        $this->assertArrayNotHasKey('thinking_budget', $format);
+    }
+
+    public function testToQwenFormatEnabledWithMinusOneBudgetOmitsBudgetField(): void
+    {
+        // -1 是 Gemini 动态分配标记，转为千问格式时不下发 thinking_budget
+        $config = ThinkingConfig::enabled(-1);
+        $format = $config->toQwenFormat();
+
+        $this->assertSame(['enable_thinking' => true], $format);
+        $this->assertArrayNotHasKey('thinking_budget', $format);
+    }
+
+    public function testToQwenFormatDisabled(): void
+    {
+        $config = ThinkingConfig::disabled();
+        $format = $config->toQwenFormat();
+
+        $this->assertSame(['enable_thinking' => false], $format);
+    }
+
+    // -----------------------------------------------------------------------
     // fromArray 向后兼容
     // -----------------------------------------------------------------------
 
@@ -225,6 +265,29 @@ class ThinkingConfigTest extends TestCase
     public function testFromArrayUnrecognizedFormatFallsBackToDisabled(): void
     {
         $config = ThinkingConfig::fromArray(['foo' => 'bar']);
+
+        $this->assertFalse($config->isEnabled());
+    }
+
+    public function testFromArrayQwenEnabledWithBudget(): void
+    {
+        $config = ThinkingConfig::fromArray(['enable_thinking' => true, 'thinking_budget' => 6000]);
+
+        $this->assertTrue($config->isEnabled());
+        $this->assertSame(6000, $config->getBudgetTokens());
+    }
+
+    public function testFromArrayQwenEnabledWithoutBudget(): void
+    {
+        $config = ThinkingConfig::fromArray(['enable_thinking' => true]);
+
+        $this->assertTrue($config->isEnabled());
+        $this->assertNull($config->getBudgetTokens());
+    }
+
+    public function testFromArrayQwenDisabled(): void
+    {
+        $config = ThinkingConfig::fromArray(['enable_thinking' => false]);
 
         $this->assertFalse($config->isEnabled());
     }

@@ -130,7 +130,7 @@ class Client extends AbstractClient
             $this->logRequest('GeminiChatStreamRequest', $url, $options, $requestId);
 
             // 发送流式请求，自动选择传输方式（Swow / OdinSimpleCurl / Guzzle）
-            ['response' => $response, 'duration' => $firstResponseDuration]
+            ['response' => $response, 'duration' => $firstResponseDuration, 'transport' => $transport]
                 = $this->sendRawStreamRequest($url, $options, $startTime);
 
             // Calculate context hash for thought signature caching
@@ -138,8 +138,11 @@ class Client extends AbstractClient
             $messages = $chatRequest->getMessages();
             $contextHash = ThoughtSignatureCache::calculateContextHash($messages, count($messages));
 
+            // buildSSEIterator 根据传输方式选择 SwowSSEClient / SSEClient，统一产出 SSEEvent
+            $sseProducer = $this->buildSSEIterator($response, $transport);
+
             // Create stream converter with cache write tokens and context hash
-            $streamConverter = new StreamConverter($response, $this->logger, $model, $cacheWriteTokens, $contextHash);
+            $streamConverter = new StreamConverter($sseProducer, $this->logger, $model, $cacheWriteTokens, $contextHash);
 
             $chatCompletionStreamResponse = new ChatCompletionStreamResponse(
                 logger: $this->logger,
@@ -154,6 +157,7 @@ class Client extends AbstractClient
             $this->logResponse('GeminiChatStreamResponse', $requestId, $firstResponseDuration, [
                 'first_response_ms' => $firstResponseDuration,
                 'response_headers' => $response->getHeaders(),
+                'transport' => $transport,
             ]);
 
             return $chatCompletionStreamResponse;

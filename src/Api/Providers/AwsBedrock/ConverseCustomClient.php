@@ -230,7 +230,13 @@ class ConverseCustomClient extends AbstractClient
                     && SwowSSEClient::isSupported()
                     && $swowCanHandleProxy
                 ) {
-                    $response = SwowSSEClient::buildSwowResponse($url, $signedHeaders, $bodyJson, $proxyUrl);
+                    $response = SwowSSEClient::buildSwowResponseFromApiOptions(
+                        $url,
+                        $signedHeaders,
+                        $bodyJson,
+                        $proxyUrl,
+                        $this->requestOptions,
+                    );
                 } else {
                     // 降级到 OdinSimpleCurl
                     // body 使用签名前保存的 $bodyJson，读流会破坏签名

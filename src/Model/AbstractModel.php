@@ -15,6 +15,7 @@ namespace Hyperf\Odin\Model;
 use Hyperf\Odin\Api\Request\ChatCompletionRequest;
 use Hyperf\Odin\Api\Request\CompletionRequest;
 use Hyperf\Odin\Api\Request\EmbeddingRequest;
+use Hyperf\Odin\Api\Request\ThinkingConfig;
 use Hyperf\Odin\Api\RequestOptions\ApiOptions;
 use Hyperf\Odin\Api\Response\ChatCompletionResponse;
 use Hyperf\Odin\Api\Response\ChatCompletionStreamResponse;
@@ -30,6 +31,7 @@ use Hyperf\Odin\Exception\LLMException\LLMNetworkException;
 use Hyperf\Odin\Exception\LLMException\Model\LLMEmbeddingNotSupportedException;
 use Hyperf\Odin\Exception\LLMException\Model\LLMFunctionCallNotSupportedException;
 use Hyperf\Odin\Exception\LLMException\Model\LLMModalityNotSupportedException;
+use Hyperf\Odin\Exception\OdinException;
 use Hyperf\Odin\Message\AssistantMessage;
 use Hyperf\Odin\Message\UserMessage;
 use Hyperf\Retry\Retry;
@@ -91,6 +93,7 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
             $this->checkFunctionCallSupport($request->getTools());
             $this->checkMultiModalSupport($request->getMessages());
             $this->checkFixedTemperature($request);
+            $this->applyThinkingBudgetFromOptions($request);
 
             // 验证请求参数（包括消息序列）
             $request->validate();
@@ -117,6 +120,7 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
             $this->checkFunctionCallSupport($request->getTools());
             $this->checkMultiModalSupport($request->getMessages());
             $this->checkFixedTemperature($request);
+            $this->applyThinkingBudgetFromOptions($request);
 
             // 验证请求参数（包括消息序列）
             $request->validate();
@@ -430,9 +434,16 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
                 }
 
                 $throwable = $context->lastThrowable;
-                // 只有网络异常才重试
-                return $throwable instanceof LLMNetworkException
-                    || ($throwable && $throwable->getPrevious() instanceof LLMNetworkException);
+                // 网络异常重试
+                if ($throwable instanceof LLMNetworkException
+                    || ($throwable && $throwable->getPrevious() instanceof LLMNetworkException)) {
+                    return true;
+                }
+                // statusCode >= 500 的异常也可重试（服务端错误）
+                if ($throwable instanceof OdinException && $throwable->getStatusCode() >= 500) {
+                    return true;
+                }
+                return false;
             })
             ->call($callable);
     }
@@ -448,6 +459,37 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
     }
 
     /**
+     * 根据 model_options 的 thinking_budget_levels 配置自动补充思考预算：.
+     *
+     * 若请求已启用 ThinkingConfig 且带有 level 但无有效 budget（null 或 -1），
+     * 从 thinking_budget_levels[level] 查找对应预算并重建 ThinkingConfig。
+     * 未配置 thinking_budget_levels 或请求已有明确 budget 时不做任何处理。
+     */
+    private function applyThinkingBudgetFromOptions(ChatCompletionRequest $request): void
+    {
+        $existingThinking = $request->getThinking();
+        if ($existingThinking === null || ! $existingThinking->isEnabled()) {
+            return;
+        }
+
+        $levels = $this->modelOptions->getThinkingBudgetLevels();
+        if (empty($levels)) {
+            return;
+        }
+
+        $currentBudget = $existingThinking->getBudgetTokens();
+        // 仅在没有有效预算时（null 或 -1），才用 level 映射表补充
+        if ($currentBudget !== null && $currentBudget !== -1) {
+            return;
+        }
+
+        $level = $existingThinking->getLevel();
+        if (isset($levels[$level])) {
+            $request->setThinking(ThinkingConfig::enabled($levels[$level], $level));
+        }
+    }
+
+    /**
      * 验证非流式响应内容是否为空.
      */
     private function validateResponseContent(ChatCompletionResponse $response): void
@@ -455,7 +497,7 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
         /** @var AssistantMessage $message */
         $message = $response->getFirstChoice()?->getMessage();
         if (! $message instanceof AssistantMessage) {
-            throw new LLMModelException('Model returned empty content response');
+            throw new LLMModelException('Model returned empty content response.', statusCode: 500);
         }
         if ($message->hasToolCalls()) {
             return;
@@ -466,7 +508,7 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
         }
         $content = $message->getContent();
         if ($content === '' || trim($content) === '') {
-            throw new LLMModelException('Model returned empty content response');
+            throw new LLMModelException('Model returned empty content response', statusCode: 500);
         }
     }
 }

@@ -19,7 +19,7 @@ namespace Hyperf\Odin\Api\Request;
  * - AWS Bedrock / OpenAI-Claude 兼容端点：type + budget_tokens
  * - Gemini gemini-2.x：thinkingBudget
  * - Gemini 旧模型：includeThoughts + thinkingLevel（level 字段仅此处生效）
- * - 其他 OpenAI 兼容服务商（DeepSeek/DashScope/Doubao 等）：type + budget_tokens 透传
+ * - 千问（Qwen3.x 混合思考模型）：enable_thinking + thinking_budget（顶层扁平字段）
  */
 class ThinkingConfig
 {
@@ -59,9 +59,19 @@ class ThinkingConfig
      * 兼容以下格式：
      * - AWS Bedrock/OpenAI: ['type' => 'enabled'|'disabled', 'budget_tokens' => int]
      * - Gemini: ['thinking_budget' => int, 'level' => 'HIGH'|'LOW'|'high'|'low']
+     * - Qwen: ['enable_thinking' => bool, 'thinking_budget' => int]
      */
     public static function fromArray(array $thinking): self
     {
+        // 千问格式：enable_thinking 键
+        if (array_key_exists('enable_thinking', $thinking)) {
+            if ($thinking['enable_thinking'] === false) {
+                return self::disabled();
+            }
+            $budgetTokens = isset($thinking['thinking_budget']) ? (int) $thinking['thinking_budget'] : null;
+            return new self(true, $budgetTokens);
+        }
+
         // 判断是否禁用
         if (isset($thinking['type']) && $thinking['type'] === 'disabled') {
             return self::disabled();
@@ -156,5 +166,31 @@ class ThinkingConfig
             $level = 'LOW';
         }
         return ['includeThoughts' => true, 'thinkingLevel' => $level];
+    }
+
+    /**
+     * 转换为千问（Qwen3.x 混合思考模型）格式。
+     *
+     * 输出顶层扁平字段：
+     * - enable_thinking：是否开启思考模式
+     * - thinking_budget：思考 token 上限，仅在 budgetTokens 为有效正整数时下发
+     *
+     * budgetTokens 为 null 或 -1 时不下发该字段，由模型使用默认值。
+     *
+     * @return array{enable_thinking: bool, thinking_budget?: int}
+     */
+    public function toQwenFormat(): array
+    {
+        if (! $this->enabled) {
+            return ['enable_thinking' => false];
+        }
+
+        $result = ['enable_thinking' => true];
+
+        if ($this->budgetTokens !== null && $this->budgetTokens > 0) {
+            $result['thinking_budget'] = $this->budgetTokens;
+        }
+
+        return $result;
     }
 }

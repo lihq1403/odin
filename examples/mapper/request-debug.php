@@ -114,10 +114,32 @@ if ($isStream) {
                 }
                 echo $content;
             }
+
+            foreach ($message->getToolCalls() as $toolCall) {
+                if ($toolCall->getName()) {
+                    echo PHP_EOL . '--- Tool Call ---' . PHP_EOL;
+                    echo 'Name: ' . $toolCall->getName() . PHP_EOL;
+                }
+                if ($toolCall->getStreamArguments()) {
+                    echo $toolCall->getStreamArguments();
+                }
+            }
         }
     }
 
-    echo PHP_EOL;
+    $usage = $response->getUsage();
+    echo PHP_EOL . '--- Usage ---' . PHP_EOL;
+    echo 'Prompt tokens    : ' . $usage->getPromptTokens() . PHP_EOL;
+    echo 'Completion tokens: ' . $usage->getCompletionTokens() . PHP_EOL;
+    echo 'Total tokens     : ' . $usage->getTotalTokens() . PHP_EOL;
+    if ($usage->getCacheWriteInputTokens() > 0) {
+        echo 'Cache write      : ' . $usage->getCacheWriteInputTokens() . PHP_EOL;
+    }
+    if ($usage->getCacheReadInputTokens() > 0) {
+        echo 'Cache read       : ' . $usage->getCacheReadInputTokens() . PHP_EOL;
+    }
+    echo '-------------' . PHP_EOL;
+
     echo '--- Stream elapsed: ' . round(microtime(true) - $start, 3) . 's ---' . PHP_EOL;
 } else {
     $response = $model->chat(
@@ -150,6 +172,18 @@ if ($isStream) {
         }
     }
 
-    echo PHP_EOL;
+    $usage = $response->getUsage();
+    echo PHP_EOL . '--- Usage ---' . PHP_EOL;
+    echo 'Prompt tokens    : ' . $usage->getPromptTokens() . PHP_EOL;
+    echo 'Completion tokens: ' . $usage->getCompletionTokens() . PHP_EOL;
+    echo 'Total tokens     : ' . $usage->getTotalTokens() . PHP_EOL;
+    if ($usage->getCacheWriteInputTokens() > 0) {
+        echo 'Cache write      : ' . $usage->getCacheWriteInputTokens() . PHP_EOL;
+    }
+    if ($usage->getCacheReadInputTokens() > 0) {
+        echo 'Cache read       : ' . $usage->getCacheReadInputTokens() . PHP_EOL;
+    }
+    echo '-------------' . PHP_EOL;
+
     echo '--- Non-stream elapsed: ' . round(microtime(true) - $start, 3) . 's ---' . PHP_EOL;
 }

@@ -17,6 +17,8 @@ use Hyperf\Context\ApplicationContext;
 use Hyperf\Di\ClassLoader;
 use Hyperf\Di\Container;
 use Hyperf\Di\Definition\DefinitionSourceFactory;
+use Hyperf\Odin\Api\Request\ChatCompletionRequest;
+use Hyperf\Odin\Api\Request\ThinkingConfig;
 use Hyperf\Odin\Message\AssistantMessage;
 use Hyperf\Odin\Message\SystemMessage;
 use Hyperf\Odin\Message\UserMessage;
@@ -38,7 +40,9 @@ $messages = [
 
 // 使用非流式API调用
 $start = microtime(true);
-$response = $model->chat($messages);
+$request = new ChatCompletionRequest($messages);
+$request->setThinking(ThinkingConfig::disabled());
+$response = $model->chatWithRequest($request);
 $message = $response->getFirstChoice()->getMessage();
 if ($message instanceof AssistantMessage) {
     echo '<think>' . PHP_EOL . $message->getReasoningContent() . PHP_EOL . '<think>' . PHP_EOL;

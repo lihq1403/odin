@@ -66,6 +66,13 @@ class ApiOptions
     protected bool $useSwowTransport = false;
 
     /**
+     * SSE 流每次 read 的字节数（buffer size）.
+     *
+     * @var int 单位：字节
+     */
+    protected int $bufferSize = 8192;
+
+    /**
      * 构造函数.
      *
      * @param array $options 配置选项
@@ -99,6 +106,10 @@ class ApiOptions
         if (isset($options['use_swow_transport'])) {
             $this->useSwowTransport = (bool) $options['use_swow_transport'];
         }
+
+        if (isset($options['buffer_size']) && is_int($options['buffer_size']) && $options['buffer_size'] > 0) {
+            $this->bufferSize = $options['buffer_size'];
+        }
     }
 
     /**
@@ -122,6 +133,7 @@ class ApiOptions
             'logging' => $this->logging,
             'network_retry_count' => $this->networkRetryCount,
             'use_swow_transport' => $this->useSwowTransport,
+            'buffer_size' => $this->bufferSize,
         ];
     }
 
@@ -199,6 +211,21 @@ class ApiOptions
     {
         $this->timeout['stream_first'] = $timeout;
         return $this;
+    }
+
+    /**
+     * 获取 Swow 流式 HTTP 单次 recv 等待上限（秒）.
+     *
+     * Swow MagicClient::setRecvMessageTimeout 在分块/SSE 读路径上会作用于多次「等下一截数据」，
+     * 若仅传入 stream_first，则两块之间的空闲也会被限制在 stream_first 内，与 stream_chunk 语义冲突。
+     * 此处取 stream_first 与 stream_chunk 的较大值，使底层读等待与二者中较宽松的一方对齐。
+     *
+     * 副作用：当 stream_chunk 大于 stream_first 时，首包阶段同样可能等待至 stream_chunk 秒才触发底层超时
+     * （首包「快失败」仅由更上层的 stream_first / thinking 检测约束，Swow 单旋钮无法同时收紧首包又放宽块间）。
+     */
+    public function getSwowStreamRecvTimeoutSeconds(): float
+    {
+        return max($this->getStreamFirstChunkTimeout(), $this->getStreamChunkTimeout());
     }
 
     /**
@@ -339,6 +366,23 @@ class ApiOptions
     public function setUseSwowTransport(bool $useSwowTransport): self
     {
         $this->useSwowTransport = $useSwowTransport;
+        return $this;
+    }
+
+    /**
+     * 获取 SSE 流 read buffer size（字节）.
+     */
+    public function getBufferSize(): int
+    {
+        return $this->bufferSize;
+    }
+
+    /**
+     * 设置 SSE 流 read buffer size（字节）.
+     */
+    public function setBufferSize(int $bufferSize): self
+    {
+        $this->bufferSize = max(1, $bufferSize);
         return $this;
     }
 }

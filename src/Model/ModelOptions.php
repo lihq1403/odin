@@ -53,6 +53,17 @@ class ModelOptions
 
     protected ?int $maxOutputTokens = null;
 
+    /**
+     * level 到 thinking_budget 的映射表。
+     * 用于不支持原生 level 的模型（如 Qwen3.x），当 ThinkingConfig 传入了 level 但没有显式 budget 时，
+     * 从此表查找对应的 token 预算。仅在 odin.php 中配置了此项时生效。
+     *
+     * 示例：['low' => 8000, 'medium' => 12000, 'high' => 16000]
+     *
+     * @var array<string, int>
+     */
+    protected array $thinkingBudgetLevels = [];
+
     public function __construct(array $options = [])
     {
         if (isset($options['chat'])) {
@@ -90,6 +101,12 @@ class ModelOptions
         if (isset($options['max_output_tokens'])) {
             $this->maxOutputTokens = (int) $options['max_output_tokens'];
         }
+
+        if (isset($options['thinking_budget_levels']) && is_array($options['thinking_budget_levels'])) {
+            foreach ($options['thinking_budget_levels'] as $level => $budget) {
+                $this->thinkingBudgetLevels[strtolower((string) $level)] = (int) $budget;
+            }
+        }
     }
 
     /**
@@ -115,6 +132,7 @@ class ModelOptions
             'default_temperature' => $this->defaultTemperature,
             'max_tokens' => $this->maxTokens,
             'max_output_tokens' => $this->maxOutputTokens,
+            'thinking_budget_levels' => $this->thinkingBudgetLevels,
         ];
     }
 
@@ -221,5 +239,21 @@ class ModelOptions
     public function setMaxOutputTokens(?int $maxOutputTokens): void
     {
         $this->maxOutputTokens = $maxOutputTokens;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    public function getThinkingBudgetLevels(): array
+    {
+        return $this->thinkingBudgetLevels;
+    }
+
+    /**
+     * @param array<string, int> $thinkingBudgetLevels
+     */
+    public function setThinkingBudgetLevels(array $thinkingBudgetLevels): void
+    {
+        $this->thinkingBudgetLevels = $thinkingBudgetLevels;
     }
 }

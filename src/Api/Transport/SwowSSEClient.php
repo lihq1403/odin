@@ -13,13 +13,13 @@ declare(strict_types=1);
 namespace Hyperf\Odin\Api\Transport;
 
 use Generator;
+use Hyperf\Odin\Api\RequestOptions\ApiOptions;
 use Hyperf\Odin\Exception\LLMException\Api\LLMInvalidRequestException;
 use Hyperf\Odin\Exception\LLMException\LLMApiException;
 use Hyperf\Odin\Exception\LLMException\LLMNetworkException;
 use Hyperf\Odin\Exception\RuntimeException;
 use Hyperf\Odin\Utils\LogUtil;
 use Hyperf\Odin\Utils\ProxyUtil;
-use IteratorAggregate;
 use JsonException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Log\LoggerInterface;
@@ -35,11 +35,9 @@ use Throwable;
  *
  * 仅在 Swow 扩展可用且处于协程上下文时使用.
  *
- * 使用方式：
- *   $response = SwowSSEClient::buildSwowResponse($url, $headers, $body, $proxyUrl);
+ * 使用方式（有 ApiOptions 时优先用封装方法，避免 recv 毫秒与流式配置不一致）：
+ *   $response = SwowSSEClient::buildSwowResponseFromApiOptions($url, $headers, $body, $proxyUrl, $apiOptions);
  *   $client   = new SwowSSEClient($response, $timeoutConfig, $logger);
- *
- * @implements IteratorAggregate<int, SSEEvent>
  */
 class SwowSSEClient implements SseEventProducerInterface
 {
@@ -50,11 +48,13 @@ class SwowSSEClient implements SseEventProducerInterface
     /**
      * @param ResponseInterface $response 已建立连接的 Swow PSR-7 响应（由 buildSwowResponse 返回）
      * @param array<string, mixed> $timeoutConfig 超时配置，键与 ApiOptions::getTimeout() 一致
+     * @param int $readSize 每次 socket read 的字节数，见 ApiOptions::getBufferSize()
      */
     public function __construct(
         private readonly ResponseInterface $response,
         ?array $timeoutConfig = null,
-        ?LoggerInterface $logger = null
+        ?LoggerInterface $logger = null,
+        private readonly int $readSize = 32,
     ) {
         if ($timeoutConfig !== null) {
             $this->exceptionDetector = new StreamExceptionDetector($timeoutConfig, $logger);
@@ -73,6 +73,35 @@ class SwowSSEClient implements SseEventProducerInterface
     }
 
     /**
+     * 使用 ApiOptions 建立 Swow 流式 HTTP 请求（连接超时 + 与流式配置对齐的 recv 超时）.
+     *
+     * 业务侧若自行调用 {@see buildSwowResponse}，易漏传或误传 recv 毫秒；应优先使用本方法。
+     *
+     * @param array<string, string> $headers 请求头（不含 Host，内部自动补充）
+     * @param null|string $proxyUrl 代理 URL；为 null 时直连
+     *
+     * @throws LLMNetworkException
+     * @throws LLMApiException
+     * @throws LLMInvalidRequestException
+     */
+    public static function buildSwowResponseFromApiOptions(
+        string $url,
+        array $headers,
+        string $body,
+        ?string $proxyUrl,
+        ApiOptions $apiOptions,
+    ): ResponseInterface {
+        return self::buildSwowResponse(
+            $url,
+            $headers,
+            $body,
+            $proxyUrl,
+            (int) ($apiOptions->getConnectionTimeout() * 1000),
+            (int) ($apiOptions->getSwowStreamRecvTimeoutSeconds() * 1000),
+        );
+    }
+
+    /**
      * 建立 Swow HTTP 连接并发送请求，返回 PSR-7 响应.
      *
      * 响应 body（ChunkedBodyStream）内部通过闭包持有对 Swow Client（Socket）的引用，
@@ -80,12 +109,22 @@ class SwowSSEClient implements SseEventProducerInterface
      *
      * @param array<string, string> $headers 请求头（不含 Host，内部自动补充）
      * @param null|string $proxyUrl 代理 URL（与 ApiOptions::getProxy() 同源）；为 null 时直连
+     * @param null|int $connectTimeoutMs TCP 连接超时（毫秒），null 表示不限制
+     * @param null|int $recvTimeoutMs MagicClient 接收消息超时（毫秒），null 表示不设置；在分块/SSE 读时
+     *                                往往作用于多次「等下一截数据」。建议用 ApiOptions::getSwowStreamRecvTimeoutSeconds()
+     *                                （stream_first 与 stream_chunk 取较大值），避免块间空闲被首包超时误伤。
      * @throws LLMNetworkException
      * @throws LLMApiException
      * @throws LLMInvalidRequestException
      */
-    public static function buildSwowResponse(string $url, array $headers, string $body, ?string $proxyUrl = null): ResponseInterface
-    {
+    public static function buildSwowResponse(
+        string $url,
+        array $headers,
+        string $body,
+        ?string $proxyUrl = null,
+        ?int $connectTimeoutMs = null,
+        ?int $recvTimeoutMs = null,
+    ): ResponseInterface {
         LogUtil::getHyperfLogger()?->info('SwowSSEClient::buildSwowResponse');
 
         [$scheme, $host, $port] = self::parseUrl($url);
@@ -113,6 +152,14 @@ class SwowSSEClient implements SseEventProducerInterface
         );
 
         $client = (new MagicClient())->setStreamingChunkedResponse(true);
+
+        if ($connectTimeoutMs !== null) {
+            $client->setConnectTimeout($connectTimeoutMs);
+        }
+        if ($recvTimeoutMs !== null) {
+            $client->setRecvMessageTimeout($recvTimeoutMs);
+        }
+
         $swowProxy = ProxyUtil::toSwowProxyArray($proxyUrl);
         if ($proxyUrl !== null && $proxyUrl !== '' && $swowProxy === null) {
             throw new LLMNetworkException("Swow 不支持的代理 URL 格式: {$proxyUrl}");
@@ -161,8 +208,8 @@ class SwowSSEClient implements SseEventProducerInterface
      */
     public function getIterator(): Generator
     {
-        // 使用 Swow 内置 SSE 解析器迭代事件流
-        $eventStream = Psr7::readEventStream($this->response->getBody());
+        // 使用 Swow 内置 SSE 解析器迭代事件流，readSize 由 ApiOptions::getBufferSize() 控制
+        $eventStream = Psr7::readEventStream($this->response->getBody(), $this->readSize);
 
         foreach ($eventStream as $streamEvent) {
             if ($this->shouldClose) {

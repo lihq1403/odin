@@ -13,9 +13,8 @@ declare(strict_types=1);
 namespace Hyperf\Odin\Api\Providers\Gemini;
 
 use Generator;
+use Hyperf\Odin\Api\Transport\SseEventProducerInterface;
 use IteratorAggregate;
-use JsonException;
-use Psr\Http\Message\ResponseInterface;
 use Psr\Log\LoggerInterface;
 use stdClass;
 use Traversable;
@@ -25,7 +24,7 @@ use Traversable;
  */
 class StreamConverter implements IteratorAggregate
 {
-    private ResponseInterface $response;
+    private SseEventProducerInterface $sseProducer;
 
     private ?LoggerInterface $logger;
 
@@ -80,13 +79,13 @@ class StreamConverter implements IteratorAggregate
     private string $contextHash;
 
     public function __construct(
-        ResponseInterface $response,
+        SseEventProducerInterface $sseProducer,
         ?LoggerInterface $logger,
         string $model,
         int $cacheWriteTokens = 0,
         string $contextHash = ''
     ) {
-        $this->response = $response;
+        $this->sseProducer = $sseProducer;
         $this->logger = $logger;
         $this->model = $model;
         $this->cacheWriteTokens = $cacheWriteTokens;
@@ -106,63 +105,22 @@ class StreamConverter implements IteratorAggregate
      */
     private function parseStream(): Generator
     {
-        $stream = $this->response->getBody();
-        $buffer = '';
         $chunkCount = 0;
 
         $this->logger?->info('GeminiStreamProcessingStarted', [
             'model' => $this->model,
         ]);
 
-        while (! $stream->eof()) {
-            $chunk = $stream->read(8192);
-            if ($chunk === '') {
+        foreach ($this->sseProducer->getIterator() as $event) {
+            $geminiChunk = $event->getData();
+            if (! is_array($geminiChunk)) {
                 continue;
             }
 
-            $buffer .= $chunk;
-
-            // Process complete JSON objects in buffer
-            while (($pos = strpos($buffer, "\n")) !== false) {
-                $line = substr($buffer, 0, $pos);
-                $buffer = substr($buffer, $pos + 1);
-
-                // Skip empty lines
-                $line = trim($line);
-                if ($line === '') {
-                    continue;
-                }
-
-                // Remove data: prefix if present (SSE format)
-                if (str_starts_with($line, 'data: ')) {
-                    $line = substr($line, 6);
-                }
-
-                // Check for done signal
-                if ($line === '[DONE]') {
-                    $this->logger?->info('GeminiStreamCompleted', [
-                        'total_chunks' => $chunkCount,
-                    ]);
-                    break 2;
-                }
-
-                try {
-                    $geminiChunk = json_decode($line, true, 512, JSON_THROW_ON_ERROR);
-
-                    // Convert Gemini chunk to OpenAI format
-                    $openAIChunk = $this->convertStreamChunk($geminiChunk);
-
-                    if ($openAIChunk !== null) {
-                        ++$chunkCount;
-                        yield $openAIChunk;
-                    }
-                } catch (JsonException $e) {
-                    $this->logger?->warning('GeminiStreamJsonDecodeError', [
-                        'error' => $e->getMessage(),
-                        'line' => substr($line, 0, 200),
-                    ]);
-                    continue;
-                }
+            $openAIChunk = $this->convertStreamChunk($geminiChunk);
+            if ($openAIChunk !== null) {
+                ++$chunkCount;
+                yield $openAIChunk;
             }
         }
 
@@ -337,10 +295,10 @@ class StreamConverter implements IteratorAggregate
     private function convertUsage(array $usageMetadata): array
     {
         // Gemini format:
-        // - promptTokenCount: tokens from new input (not from cache)
-        // - cachedContentTokenCount: tokens read from cache
+        // - promptTokenCount: total prompt tokens (including cached tokens)
+        // - cachedContentTokenCount: tokens served from cache (subset of promptTokenCount)
         $cacheReadTokens = $usageMetadata['cachedContentTokenCount'] ?? 0;
-        $inputTokens = $usageMetadata['promptTokenCount'] ?? 0 - $cacheReadTokens;
+        $inputTokens = ($usageMetadata['promptTokenCount'] ?? 0) - $cacheReadTokens;
 
         // 如果有 $cacheWriteTokens，代表是第一次写入，那么本次虽然会读取到缓存但是不计入读取量
         if ($this->cacheWriteTokens > 0) {

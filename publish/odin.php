@@ -34,6 +34,21 @@ return [
             'embedding' => false,
             'multi_modal' => false,
             'vector_size' => 0,
+            // level 到 thinking_budget 的映射表。
+            // 用于不支持原生 level 的模型（如 Qwen3.x）：当 ThinkingConfig 传入了 level
+            // 但没有显式 budget 时，从此表查找对应的 token 预算。
+            // 仅在配置了此项时生效，可在全局设置，也可在单个模型的 model_options 中覆盖。
+            //
+            // 参考 Qwen3 标准模型最大思考预算 ~32768 tokens（粒度 1024）：
+            //   low    ≈ 5%   max → 简单任务，速度优先
+            //   medium ≈ 50%  max → 中等复杂度任务
+            //   high   ≈ 100% max → 复杂推理，质量优先
+            // 注意：模型倾向于耗尽所分配的全部预算，low 值不宜设置过大。
+            // 'thinking_budget_levels' => [
+            //     'low'    => 4096,
+            //     'medium' => 16384,
+            //     'high'   => 32768,
+            // ],
         ],
         'general_api_options' => [
             'timeout' => [

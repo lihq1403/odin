@@ -36,6 +36,7 @@ class ApiOptionsTest extends AbstractTestCase
         $this->assertEquals(120.0, $options->getThinkingTimeout());
         $this->assertEquals(60.0, $options->getStreamChunkTimeout());
         $this->assertEquals(60.0, $options->getStreamFirstChunkTimeout());
+        $this->assertEquals(60.0, $options->getSwowStreamRecvTimeoutSeconds());
 
         // 验证自定义错误映射规则默认为空数组
         $this->assertEquals([], $options->getCustomErrorMappingRules());
@@ -70,6 +71,28 @@ class ApiOptionsTest extends AbstractTestCase
             ['rate_limit_exceeded' => 'RateLimitExceededException'],
             $options->getCustomErrorMappingRules()
         );
+    }
+
+    /**
+     * Swow 流式 recv 超时取 stream_first 与 stream_chunk 的较大值.
+     */
+    public function testSwowStreamRecvTimeoutSecondsIsMaxOfStreamFirstAndChunk(): void
+    {
+        $tighterFirst = new ApiOptions([
+            'timeout' => [
+                'stream_first' => 120.0,
+                'stream_chunk' => 300.0,
+            ],
+        ]);
+        $this->assertSame(300.0, $tighterFirst->getSwowStreamRecvTimeoutSeconds());
+
+        $tighterChunk = new ApiOptions([
+            'timeout' => [
+                'stream_first' => 300.0,
+                'stream_chunk' => 120.0,
+            ],
+        ]);
+        $this->assertSame(300.0, $tighterChunk->getSwowStreamRecvTimeoutSeconds());
     }
 
     /**

@@ -22,6 +22,7 @@ use Hyperf\Odin\Exception\LLMException;
 use Hyperf\Odin\Message\AssistantMessage;
 use Hyperf\Odin\Utils\EventUtil;
 use Hyperf\Odin\Utils\LoggingConfigHelper;
+use Hyperf\Odin\Utils\StreamChunkParseFailureContext;
 use Hyperf\Odin\Utils\TimeUtil;
 use IteratorAggregate;
 use JsonException;
@@ -205,6 +206,10 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
         $chunkCount = 0;
         $lastLogTime = $startTime;
         $lastChunkData = null;
+        $lastFinishReason = null;
+        $firstChunks = [];
+        $lastChunks = [];
+        $maxChunksToLog = 5;
 
         try {
             $this->logger?->info('StreamProcessingStartedWithCustomIterator', [
@@ -225,19 +230,42 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
                     try {
                         $data = json_decode($data, true, 512, JSON_THROW_ON_ERROR);
                     } catch (JsonException $e) {
-                        $this->logger?->warning('InvalidJsonInStream', ['data' => $data, 'error' => $e->getMessage()]);
+                        $this->logger?->warning('InvalidJsonInStream', array_merge([
+                            'chunk_count' => $chunkCount,
+                        ], StreamChunkParseFailureContext::forRawLine($data, $e->getMessage())));
                         continue;
                     }
                 }
 
                 // 确保数据是有效的数组
                 if (! is_array($data)) {
-                    $this->logger?->warning('InvalidDataFormat', ['data' => $data, 'chunk_count' => $chunkCount]);
+                    $this->logger?->warning('InvalidDataFormat', array_merge([
+                        'chunk_count' => $chunkCount,
+                    ], StreamChunkParseFailureContext::forInvalidChunkShape($data)));
                     continue;
                 }
 
                 // Store last valid chunk data
                 $lastChunkData = $data;
+
+                // Track finish_reason (the usage chunk at the end has empty choices)
+                if (! empty($data['choices'][0]['finish_reason'])) {
+                    $lastFinishReason = $data['choices'][0]['finish_reason'];
+                }
+
+                // Collect first and last raw chunks for debugging
+                $chunkWithTime = [
+                    'index' => $chunkCount,
+                    'timestamp' => microtime(true),
+                    'data' => $data,
+                ];
+                if ($chunkCount <= $maxChunksToLog) {
+                    $firstChunks[] = $chunkWithTime;
+                }
+                $lastChunks[] = $chunkWithTime;
+                if (count($lastChunks) > $maxChunksToLog) {
+                    array_shift($lastChunks);
+                }
 
                 // Log checkpoint (first 5 chunks and every 200 chunks)
                 if ($this->shouldLogCheckpoint($chunkCount)) {
@@ -287,7 +315,21 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
                     'model' => $lastChunkData['model'] ?? null,
                     'choices' => $lastChunkData['choices'] ?? [],
                     'usage' => $lastChunkData['usage'] ?? null,
-                    'finish_reason' => $lastChunkData['choices'][0]['finish_reason'] ?? null,
+                    'finish_reason' => $lastFinishReason,
+                ]);
+            }
+
+            // Log first and last raw chunks
+            if (! empty($firstChunks)) {
+                $this->logger?->info('FirstRawChunksFromCustomIterator', [
+                    'total_chunks' => $chunkCount,
+                    'chunks' => $firstChunks,
+                ]);
+            }
+            if (! empty($lastChunks)) {
+                $this->logger?->info('LastRawChunksFromCustomIterator', [
+                    'total_chunks' => $chunkCount,
+                    'chunks' => $lastChunks,
                 ]);
             }
 
@@ -312,6 +354,10 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
         $chunkCount = 0;
         $lastLogTime = $startTime;
         $lastChunkData = null;
+        $lastFinishReason = null;
+        $firstChunks = [];
+        $lastChunks = [];
+        $maxChunksToLog = 5;
 
         try {
             $this->logger?->info('StreamProcessingStartedWithSseClient', [
@@ -344,12 +390,33 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
 
                 // 确保数据是有效的数组
                 if (! is_array($data)) {
-                    $this->logger?->warning('InvalidDataFormat', ['data' => $data, 'chunk_count' => $chunkCount]);
+                    $this->logger?->warning('InvalidDataFormat', array_merge([
+                        'chunk_count' => $chunkCount,
+                    ], StreamChunkParseFailureContext::forInvalidChunkShape($data)));
                     continue;
                 }
 
                 // Store last valid chunk data
                 $lastChunkData = $data;
+
+                // Track finish_reason (the usage chunk at the end has empty choices)
+                if (! empty($data['choices'][0]['finish_reason'])) {
+                    $lastFinishReason = $data['choices'][0]['finish_reason'];
+                }
+
+                // Collect first and last raw chunks for debugging
+                $chunkWithTime = [
+                    'index' => $chunkCount,
+                    'timestamp' => microtime(true),
+                    'data' => $data,
+                ];
+                if ($chunkCount <= $maxChunksToLog) {
+                    $firstChunks[] = $chunkWithTime;
+                }
+                $lastChunks[] = $chunkWithTime;
+                if (count($lastChunks) > $maxChunksToLog) {
+                    array_shift($lastChunks);
+                }
 
                 // Log checkpoint (first 5 chunks and every 200 chunks)
                 if ($this->shouldLogCheckpoint($chunkCount)) {
@@ -399,7 +466,21 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
                     'model' => $lastChunkData['model'] ?? null,
                     'choices' => $lastChunkData['choices'] ?? [],
                     'usage' => $lastChunkData['usage'] ?? null,
-                    'finish_reason' => $lastChunkData['choices'][0]['finish_reason'] ?? null,
+                    'finish_reason' => $lastFinishReason,
+                ]);
+            }
+
+            // Log first and last raw chunks
+            if (! empty($firstChunks)) {
+                $this->logger?->info('FirstRawChunksFromSseClient', [
+                    'total_chunks' => $chunkCount,
+                    'chunks' => $firstChunks,
+                ]);
+            }
+            if (! empty($lastChunks)) {
+                $this->logger?->info('LastRawChunksFromSseClient', [
+                    'total_chunks' => $chunkCount,
+                    'chunks' => $lastChunks,
                 ]);
             }
 
@@ -491,6 +572,10 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
         $chunkCount = 0;
         $lastLogTime = $startTime;
         $lastChunkData = null;
+        $lastFinishReason = null;
+        $firstChunks = [];
+        $lastChunks = [];
+        $maxChunksToLog = 5;
         $body = $this->originResponse->getBody();
 
         $this->logger?->info('StreamProcessingStartedWithLegacyMethod', [
@@ -531,6 +616,25 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
                     // Store last valid chunk data
                     $lastChunkData = $data;
 
+                    // Track finish_reason (the usage chunk at the end has empty choices)
+                    if (! empty($data['choices'][0]['finish_reason'])) {
+                        $lastFinishReason = $data['choices'][0]['finish_reason'];
+                    }
+
+                    // Collect first and last raw chunks for debugging
+                    $chunkWithTime = [
+                        'index' => $chunkCount,
+                        'timestamp' => microtime(true),
+                        'data' => $data,
+                    ];
+                    if ($chunkCount <= $maxChunksToLog) {
+                        $firstChunks[] = $chunkWithTime;
+                    }
+                    $lastChunks[] = $chunkWithTime;
+                    if (count($lastChunks) > $maxChunksToLog) {
+                        array_shift($lastChunks);
+                    }
+
                     // Log checkpoint (first 5 chunks and every 200 chunks)
                     if ($this->shouldLogCheckpoint($chunkCount)) {
                         $currentTime = microtime(true);
@@ -562,7 +666,10 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
                     $this->updateMetadata($data);
                     yield from $this->yieldChoices($data['choices'] ?? []);
                 } catch (JsonException $e) {
-                    $this->logger?->warning('InvalidJsonResponse', ['line' => $line, 'error' => $e->getMessage(), 'chunk_count' => $chunkCount]);
+                    $rawForLog = trim($line);
+                    $this->logger?->warning('InvalidJsonResponse', array_merge([
+                        'chunk_count' => $chunkCount,
+                    ], StreamChunkParseFailureContext::forRawLine($rawForLog, $e->getMessage())));
                     continue;
                 }
             }
@@ -576,7 +683,21 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
                 'model' => $lastChunkData['model'] ?? null,
                 'choices' => $lastChunkData['choices'] ?? [],
                 'usage' => $lastChunkData['usage'] ?? null,
-                'finish_reason' => $lastChunkData['choices'][0]['finish_reason'] ?? null,
+                'finish_reason' => $lastFinishReason,
+            ]);
+        }
+
+        // Log first and last raw chunks
+        if (! empty($firstChunks)) {
+            $this->logger?->info('FirstRawChunksFromLegacyMethod', [
+                'total_chunks' => $chunkCount,
+                'chunks' => $firstChunks,
+            ]);
+        }
+        if (! empty($lastChunks)) {
+            $this->logger?->info('LastRawChunksFromLegacyMethod', [
+                'total_chunks' => $chunkCount,
+                'chunks' => $lastChunks,
             ]);
         }
 
