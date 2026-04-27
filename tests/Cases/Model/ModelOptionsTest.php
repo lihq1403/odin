@@ -100,6 +100,7 @@ class ModelOptionsTest extends AbstractTestCase
             'default_temperature' => null,
             'max_tokens' => null,
             'max_output_tokens' => null,
+            'thinking_budget_levels' => [],
         ];
 
         $this->assertIsArray($array);
