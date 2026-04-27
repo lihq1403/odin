@@ -18,6 +18,8 @@ use Hyperf\Odin\Api\Providers\OpenAI\Client;
 use Hyperf\Odin\Api\Request\EmbeddingRequest;
 use Hyperf\Odin\Api\Request\VolcengineMultiModalEmbeddingRequest;
 use Hyperf\Odin\Api\Response\EmbeddingResponse;
+use Hyperf\Odin\Event\AfterEmbeddingsEvent;
+use Hyperf\Odin\Utils\EventUtil;
 use Psr\Http\Message\ResponseInterface;
 use Throwable;
 
@@ -51,10 +53,7 @@ class VolcengineArkClient extends Client
             $embeddingResponse = $this->buildCompatibleEmbeddingResponse(
                 $this->normalizeMultiModalData($content['data'] ?? null),
                 $content['model'] ?? $embeddingRequest->getModel(),
-                $content['usage'] ?? [
-                    'prompt_tokens' => 0,
-                    'total_tokens' => 0,
-                ],
+                $this->normalizeUsage($content['usage'] ?? null),
                 $response
             );
 
@@ -62,6 +61,8 @@ class VolcengineArkClient extends Client
                 'data' => $embeddingResponse->toArray(),
                 'response_headers' => $embeddingResponse->getOriginResponse()->getHeaders(),
             ]);
+
+            EventUtil::dispatch(new AfterEmbeddingsEvent($embeddingRequest, $embeddingResponse, $duration));
 
             return $embeddingResponse;
         } catch (Throwable $exception) {
@@ -87,6 +88,11 @@ class VolcengineArkClient extends Client
         return [];
     }
 
+    private function normalizeUsage(mixed $usage): ?array
+    {
+        return is_array($usage) ? $usage : null;
+    }
+
     private function buildMultiModalEmbeddingRequest(
         EmbeddingRequest $embeddingRequest
     ): VolcengineMultiModalEmbeddingRequest {
@@ -103,14 +109,18 @@ class VolcengineArkClient extends Client
         return $request;
     }
 
-    private function buildCompatibleEmbeddingResponse(array $data, string $model, array $usage, ?ResponseInterface $baseResponse = null): EmbeddingResponse
+    private function buildCompatibleEmbeddingResponse(array $data, string $model, ?array $usage, ?ResponseInterface $baseResponse = null): EmbeddingResponse
     {
-        $body = json_encode([
+        $payload = [
             'object' => 'list',
             'data' => $data,
             'model' => $model,
-            'usage' => $usage,
-        ], JSON_THROW_ON_ERROR);
+        ];
+        if ($usage !== null) {
+            $payload['usage'] = $usage;
+        }
+
+        $body = json_encode($payload, JSON_THROW_ON_ERROR);
 
         $response = $baseResponse instanceof ResponseInterface
             ? $baseResponse->withBody(Utils::streamFor($body))
