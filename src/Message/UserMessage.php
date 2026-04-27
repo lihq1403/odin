@@ -128,7 +128,9 @@ class UserMessage extends AbstractMessage
                 }
                 $userMessageContent = (new UserMessageContent($type))
                     ->setText($item['text'] ?? '')
-                    ->setImageUrl($item['image_url']['url'] ?? '');
+                    ->setImageUrl($item['image_url']['url'] ?? '')
+                    ->setVideoUrl($item['video_url']['url'] ?? '')
+                    ->setFps(isset($item['video_url']['fps']) ? (float) $item['video_url']['fps'] : null);
                 if ($userMessageContent->isValid()) {
                     $instance->addContent($userMessageContent);
                 }
@@ -147,6 +149,19 @@ class UserMessage extends AbstractMessage
         }
         foreach ($this->contents as $content) {
             if ($content->getType() === UserMessageContent::IMAGE_URL) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public function hasVideoMultiModal(): bool
+    {
+        if (empty($this->contents)) {
+            return false;
+        }
+        foreach ($this->contents as $content) {
+            if ($content->getType() === UserMessageContent::VIDEO_URL) {
                 return true;
             }
         }

@@ -146,6 +146,91 @@ class UserMessageTest extends AbstractTestCase
     }
 
     /**
+     * 测试从数组创建带有视频内容的用户消息.
+     */
+    public function testFromArrayWithVideoContent()
+    {
+        $array = [
+            'content' => [
+                [
+                    'type' => 'text',
+                    'text' => '请分析这段视频',
+                ],
+                [
+                    'type' => 'video_url',
+                    'video_url' => [
+                        'url' => 'https://example.com/video.mp4',
+                        'fps' => 2.0,
+                    ],
+                ],
+            ],
+        ];
+
+        $message = UserMessage::fromArray($array);
+
+        $contents = $message->getContents();
+        $this->assertIsArray($contents);
+        $this->assertCount(2, $contents);
+
+        $this->assertSame(UserMessageContent::TEXT, $contents[0]->getType());
+        $this->assertSame('请分析这段视频', $contents[0]->getText());
+
+        $this->assertSame(UserMessageContent::VIDEO_URL, $contents[1]->getType());
+        $this->assertSame('https://example.com/video.mp4', $contents[1]->getVideoUrl());
+        $this->assertSame(2.0, $contents[1]->getFps());
+
+        // 验证 toArray 能正确序列化回去
+        $serialized = $message->toArray();
+        $this->assertSame('video_url', $serialized['content'][1]['type']);
+        $this->assertSame('https://example.com/video.mp4', $serialized['content'][1]['video_url']['url']);
+        $this->assertSame(2.0, $serialized['content'][1]['video_url']['fps']);
+    }
+
+    /**
+     * 测试从数组创建不含 fps 的视频内容.
+     */
+    public function testFromArrayWithVideoContentWithoutFps()
+    {
+        $array = [
+            'content' => [
+                [
+                    'type' => 'video_url',
+                    'video_url' => [
+                        'url' => 'https://example.com/video.mp4',
+                    ],
+                ],
+            ],
+        ];
+
+        $message = UserMessage::fromArray($array);
+        $contents = $message->getContents();
+
+        $this->assertIsArray($contents);
+        $this->assertCount(1, $contents);
+        $this->assertNull($contents[0]->getFps());
+
+        // fps 为 null 时序列化结果中不包含 fps 字段
+        $serialized = $message->toArray();
+        $this->assertArrayNotHasKey('fps', $serialized['content'][0]['video_url']);
+    }
+
+    /**
+     * 测试 hasVideoMultiModal 检测.
+     */
+    public function testHasVideoMultiModal()
+    {
+        $message = new UserMessage();
+        $this->assertFalse($message->hasVideoMultiModal());
+
+        $message->addContent(UserMessageContent::text('文本'));
+        $this->assertFalse($message->hasVideoMultiModal());
+
+        $message->addContent(UserMessageContent::videoUrl('https://example.com/video.mp4'));
+        $this->assertTrue($message->hasVideoMultiModal());
+        $this->assertFalse($message->hasImageMultiModal());
+    }
+
+    /**
      * 带 cache_control 的文本块；以及无 type 仅有 text 的块（与 ToolMessage 等格式对齐）.
      */
     public function testFromArrayWithCacheControlAndTextOnlyBlocks()

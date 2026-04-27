@@ -350,8 +350,8 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
     protected function containsMultiModalContent(array $messages): bool
     {
         foreach ($messages as $message) {
-            // 检查消息的content字段是否为数组（多模态内容通常以数组形式提供）
-            if ($message instanceof UserMessage && $message->hasImageMultiModal()) {
+            if ($message instanceof UserMessage
+                && ($message->hasImageMultiModal() || $message->hasVideoMultiModal())) {
                 return true;
             }
         }

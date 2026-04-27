@@ -25,6 +25,16 @@ use Hyperf\Odin\Tool\Definition\ToolDefinition;
 class TokenEstimator
 {
     /**
+     * 图片 token 估算值（低分辨率图片约 65 tokens）.
+     */
+    private const IMAGE_TOKEN_ESTIMATE = 65;
+
+    /**
+     * 视频 token 估算值（按帧采样，保守估算约 512 tokens）.
+     */
+    private const VIDEO_TOKEN_ESTIMATE = 512;
+
+    /**
      * 中文字符和英文单词平均 token 比例.
      */
     private const CHINESE_CHAR_RATIO = 1.5;
@@ -123,15 +133,16 @@ class TokenEstimator
         if ($message instanceof UserMessage && ($contents = $message->getContents()) !== null) {
             foreach ($contents as $content) {
                 if ($content->getType() === 'text') {
-                    $contentTokens += $this->estimateTokens($content->getText() ?? '');
+                    $contentTokens += $this->estimateTokens($content->getText());
                 } elseif ($content->getType() === 'image_url') {
-                    // 图片token估算 - 简化处理
-                    $contentTokens += 65; // 低分辨率图片约65 tokens
+                    $contentTokens += self::IMAGE_TOKEN_ESTIMATE;
+                } elseif ($content->getType() === 'video_url') {
+                    $contentTokens += self::VIDEO_TOKEN_ESTIMATE;
                 }
             }
         } else {
             // 常规文本消息
-            $contentTokens = $this->estimateTokens($message->getContent() ?? '');
+            $contentTokens = $this->estimateTokens($message->getContent());
         }
 
         // 处理助手消息中的工具调用
