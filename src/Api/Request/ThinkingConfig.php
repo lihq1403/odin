@@ -161,6 +161,17 @@ class ThinkingConfig
             return ['thinkingBudget' => $budget];
         }
 
+        if (str_starts_with($normalizedModel, 'gemini-3')) {
+            // gemini-3.x 及更新版本：仅 thinkingLevel（小写），无需其他字段
+            // 合法值：low / medium / high（全系列）; minimal（仅 Flash 系列，最低延迟）
+            $level = strtolower($this->level);
+            if (! in_array($level, ['high', 'medium', 'low', 'minimal'], true)) {
+                $level = 'low';
+            }
+            return ['thinkingLevel' => $level];
+        }
+
+        // 旧版 Gemini（gemini-1.x 等）：includeThoughts + 大写 thinkingLevel
         $level = strtoupper($this->level);
         if (! in_array($level, ['HIGH', 'MEDIUM', 'LOW'], true)) {
             $level = 'LOW';
