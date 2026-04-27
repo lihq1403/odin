@@ -85,6 +85,8 @@ class ErrorMessage
 
     public const UNSUPPORTED_IMAGE_FORMAT = 'Unsupported image format';
 
+    public const UNSUPPORTED_VIDEO_FORMAT = 'Unsupported video format';
+
     public const MODEL_INVALID_CONTENT = 'Model produced invalid content';
 
     /**
