@@ -28,8 +28,8 @@ class AwsBedrockModel extends AbstractModel
         // AWS Bedrock不需要处理API基础URL
         $config = $this->config;
 
-        // 使用ClientFactory创建AWS Bedrock客户端
-        return ClientFactory::createAwsBedrockClient(
+        return ClientFactory::createClient(
+            'aws_bedrock',
             $config,
             $this->getApiRequestOptions(),
             $this->logger

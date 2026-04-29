@@ -33,9 +33,8 @@ class AzureOpenAIModel extends AbstractModel
     {
         // Azure OpenAI通过Client自己处理URL路径，不需要使用processApiBaseUrl
         // 因为它的URL结构比较特殊: {endpoint}/openai/deployments/{deployment-id}/chat/completions?api-version={api-version}
-
-        // 使用ClientFactory创建AzureOpenAI客户端
-        return ClientFactory::createAzureOpenAIClient(
+        return ClientFactory::createClient(
+            'azure_openai',
             $this->config,
             $this->getApiRequestOptions(),
             $this->logger

@@ -43,13 +43,41 @@ use Psr\Log\LoggerInterface;
 class ClientFactory
 {
     /**
+     * 根据提供商类型创建客户端.
+     *
+     * @param string $provider 提供商类型 (openai, azure_openai, aws_bedrock, dashscope, gemini, deepseek, anthropic, qianfan, volcengine)
+     * @param array $config 配置参数
+     * @param null|ApiOptions $apiOptions API请求选项
+     * @param null|LoggerInterface $logger 日志记录器
+     */
+    public static function createClient(string $provider, array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
+    {
+        if (! $apiOptions) {
+            $apiOptions = new ApiOptions();
+        }
+        $logger?->info("Creating client for {$provider}");
+        return match ($provider) {
+            'openai' => self::createOpenAIClient($config, $apiOptions, $logger),
+            'azure_openai' => self::createAzureOpenAIClient($config, $apiOptions, $logger),
+            'aws_bedrock' => self::createAwsBedrockClient($config, $apiOptions, $logger),
+            'dashscope' => self::createDashScopeClient($config, $apiOptions, $logger),
+            'gemini' => self::createGeminiClient($config, $apiOptions, $logger),
+            'deepseek' => self::createDeepSeekClient($config, $apiOptions, $logger),
+            'anthropic' => self::createAnthropicClient($config, $apiOptions, $logger),
+            'qianfan' => self::createOpenAIClient($config, $apiOptions, $logger),
+            'volcengine' => self::createVolcengineArkClient($config, $apiOptions, $logger),
+            default => throw new InvalidArgumentException(sprintf('Unsupported provider: %s', $provider)),
+        };
+    }
+
+    /**
      * 创建OpenAI客户端.
      *
      * @param array $config 配置参数
      * @param null|ApiOptions $apiOptions API请求选项
      * @param null|LoggerInterface $logger 日志记录器
      */
-    public static function createOpenAIClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
+    private static function createOpenAIClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
     {
         // 通过 fromArray 统一解析，支持 auto_cache / auto_cache_config 等扩展字段
         $clientConfig = OpenAIConfig::fromArray($config);
@@ -68,7 +96,7 @@ class ClientFactory
      * @param null|ApiOptions $apiOptions API请求选项
      * @param null|LoggerInterface $logger 日志记录器
      */
-    public static function createVolcengineArkClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
+    private static function createVolcengineArkClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
     {
         $clientConfig = OpenAIConfig::fromArray($config);
 
@@ -84,7 +112,7 @@ class ClientFactory
      * @param null|ApiOptions $apiOptions API请求选项
      * @param null|LoggerInterface $logger 日志记录器
      */
-    public static function createAzureOpenAIClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
+    private static function createAzureOpenAIClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
     {
         // 验证必要的配置参数
         $apiKey = $config['api_key'] ?? '';
@@ -114,7 +142,7 @@ class ClientFactory
      * @param null|ApiOptions $apiOptions API请求选项
      * @param null|LoggerInterface $logger 日志记录器
      */
-    public static function createAwsBedrockClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
+    private static function createAwsBedrockClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
     {
         // 验证必要的配置参数
         $accessKey = $config['access_key'] ?? '';
@@ -161,7 +189,7 @@ class ClientFactory
      * @param null|ApiOptions $apiOptions API请求选项
      * @param null|LoggerInterface $logger 日志记录器
      */
-    public static function createDashScopeClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
+    private static function createDashScopeClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
     {
         // 验证必要的配置参数
         $apiKey = $config['api_key'] ?? '';
@@ -205,7 +233,7 @@ class ClientFactory
      * @param null|ApiOptions $apiOptions API请求选项
      * @param null|LoggerInterface $logger 日志记录器
      */
-    public static function createGeminiClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
+    private static function createGeminiClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
     {
         // 验证必要的配置参数
         $apiKey = $config['api_key'] ?? '';
@@ -266,7 +294,7 @@ class ClientFactory
      * @param null|ApiOptions $apiOptions API请求选项
      * @param null|LoggerInterface $logger 日志记录器
      */
-    public static function createDeepSeekClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
+    private static function createDeepSeekClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
     {
         // 验证必要的配置参数
         $apiKey = $config['api_key'] ?? '';
@@ -299,7 +327,7 @@ class ClientFactory
      * @param null|ApiOptions $apiOptions API请求选项
      * @param null|LoggerInterface $logger 日志记录器
      */
-    public static function createAnthropicClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
+    private static function createAnthropicClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
     {
         $clientConfig = AnthropicConfig::fromArray($config);
 
@@ -310,30 +338,5 @@ class ClientFactory
         $anthropic = new Anthropic();
 
         return $anthropic->getClient($clientConfig, $apiOptions, $logger);
-    }
-
-    /**
-     * 根据提供商类型创建客户端.
-     *
-     * @param string $provider 提供商类型 (openai, azure_openai, aws_bedrock, dashscope, gemini, deepseek, anthropic)
-     * @param array $config 配置参数
-     * @param null|ApiOptions $apiOptions API请求选项
-     * @param null|LoggerInterface $logger 日志记录器
-     */
-    public static function createClient(string $provider, array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
-    {
-        if (! $apiOptions) {
-            $apiOptions = new ApiOptions();
-        }
-        return match ($provider) {
-            'openai' => self::createOpenAIClient($config, $apiOptions, $logger),
-            'azure_openai' => self::createAzureOpenAIClient($config, $apiOptions, $logger),
-            'aws_bedrock' => self::createAwsBedrockClient($config, $apiOptions, $logger),
-            'dashscope' => self::createDashScopeClient($config, $apiOptions, $logger),
-            'gemini' => self::createGeminiClient($config, $apiOptions, $logger),
-            'deepseek' => self::createDeepSeekClient($config, $apiOptions, $logger),
-            'anthropic' => self::createAnthropicClient($config, $apiOptions, $logger),
-            default => throw new InvalidArgumentException(sprintf('Unsupported provider: %s', $provider)),
-        };
     }
 }

@@ -38,15 +38,16 @@ class AzureOpenAIModelTest extends AbstractTestCase
      */
     public function testGetClient()
     {
-        // 使用 Mockery 替换 ClientFactory::createAzureOpenAIClient 方法
+        // 使用 Mockery 替换 ClientFactory::createClient 方法
         $clientMock = Mockery::mock(ClientInterface::class);
 
         $clientFactoryMock = Mockery::mock('alias:' . ClientFactory::class);
-        $clientFactoryMock->shouldReceive('createAzureOpenAIClient')
+        $clientFactoryMock->shouldReceive('createClient')
             ->once()
-            ->withArgs(function ($config, $apiOptions, $logger) {
-                // 验证 config 中的必要参数
-                return isset($config['api_key']) && isset($config['base_url'], $config['deployment_name'], $config['api_version']);
+            ->withArgs(function ($provider, $config, $apiOptions, $logger) {
+                // 验证 provider 及 config 中的必要参数
+                return $provider === 'azure_openai'
+                    && isset($config['api_key'], $config['base_url'],$config['deployment_name'],$config['api_version']);
             })
             ->andReturn($clientMock);
 

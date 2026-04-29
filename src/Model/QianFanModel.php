@@ -47,8 +47,8 @@ class QianFanModel extends AbstractModel
         $config = $this->config;
         $this->processApiBaseUrl($config);
 
-        // 使用ClientFactory创建OpenAI客户端
-        return ClientFactory::createOpenAIClient(
+        return ClientFactory::createClient(
+            'qianfan',
             $config,
             $this->getApiRequestOptions(),
             $this->logger

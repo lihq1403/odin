@@ -42,7 +42,8 @@ class VolcengineMultiModalEmbeddingModel extends DoubaoModel
         $config = $this->config;
         $this->processApiBaseUrl($config);
 
-        return ClientFactory::createVolcengineArkClient(
+        return ClientFactory::createClient(
+            'volcengine',
             $config,
             $this->getApiRequestOptions(),
             $this->logger
