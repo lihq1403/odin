@@ -171,6 +171,16 @@ class SwowSSEClient implements SseEventProducerInterface
         try {
             $response = $client->sendRequest($request);
         } catch (Throwable $e) {
+            // 遍历异常链，提取 llhttp ParserException 中的原始解析错误信息。
+            // 异常链结构：ClientRequestException -> ProtocolException -> ParserException(llhttp 原始错误)
+            $chain = [];
+            for ($cause = $e; $cause !== null; $cause = $cause->getPrevious()) {
+                $chain[] = get_class($cause) . ': ' . $cause->getMessage();
+            }
+            LogUtil::getHyperfLogger()?->warning('Swow HTTP 协议解析失败', [
+                'url' => $url,
+                'error_chain' => $chain,
+            ]);
             throw new LLMNetworkException(
                 'Swow HTTP 请求失败: ' . $e->getMessage(),
                 0,
