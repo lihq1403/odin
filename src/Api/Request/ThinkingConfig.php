@@ -180,6 +180,31 @@ class ThinkingConfig
     }
 
     /**
+     * 转换为 DeepSeek 思考模式格式（OpenAI 兼容格式）。
+     *
+     * - 思考开关：thinking.type = enabled/disabled
+     * - 思考强度：reasoning_effort，由 level 映射而来
+     *   - level = 'low'  → reasoning_effort = 'high'（DeepSeek 默认强度）
+     *   - level = 'high' → reasoning_effort = 'max'（最高强度）
+     *
+     * @return array{thinking: array{type: string}, reasoning_effort?: string}
+     */
+    public function toDeepSeekFormat(): array
+    {
+        if (! $this->enabled) {
+            return ['thinking' => ['type' => 'disabled']];
+        }
+
+        // level 映射：low -> high，high -> max
+        $reasoningEffort = $this->level === 'high' ? 'max' : 'high';
+
+        return [
+            'thinking' => ['type' => 'enabled'],
+            'reasoning_effort' => $reasoningEffort,
+        ];
+    }
+
+    /**
      * 转换为千问（Qwen3.x 混合思考模型）格式。
      *
      * 输出顶层扁平字段：

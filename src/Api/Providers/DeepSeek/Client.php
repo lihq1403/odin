@@ -12,14 +12,18 @@ declare(strict_types=1);
 
 namespace Hyperf\Odin\Api\Providers\DeepSeek;
 
+use GuzzleHttp\RequestOptions;
 use Hyperf\Odin\Api\Providers\AbstractClient;
 use Hyperf\Odin\Api\Request\ChatCompletionRequest;
 use Hyperf\Odin\Api\RequestOptions\ApiOptions;
 use Hyperf\Odin\Api\Response\ChatCompletionResponse;
 use Hyperf\Odin\Api\Response\ChatCompletionStreamResponse;
+use Hyperf\Odin\Event\AfterChatCompletionsEvent;
 use Hyperf\Odin\Event\AfterChatCompletionsStreamEvent;
 use Hyperf\Odin\Message\AssistantMessage;
+use Hyperf\Odin\Utils\EventUtil;
 use Psr\Log\LoggerInterface;
+use Throwable;
 
 /**
  * DeepSeek API client.
@@ -54,9 +58,37 @@ class Client extends AbstractClient
     public function chatCompletions(ChatCompletionRequest $chatRequest): ChatCompletionResponse
     {
         $this->restoreReasoningContentFromCache($chatRequest);
-        $response = parent::chatCompletions($chatRequest);
-        $this->cacheReasoningContentFromResponse($response);
-        return $response;
+
+        $chatRequest->validate();
+        $options = $chatRequest->createOptions();
+
+        // 将通用 thinking 字段转换为 DeepSeek 格式
+        $this->processThinkingConfig($chatRequest, $options);
+
+        $url = $this->buildChatCompletionsUrl();
+        $requestId = $this->addRequestIdToOptions($options);
+
+        $this->logRequest('ChatCompletionsRequest', $url, $options, $requestId);
+
+        $startTime = microtime(true);
+        try {
+            $response = $this->client->post($url, $options);
+            $duration = $this->calculateDuration($startTime);
+            $chatCompletionResponse = new ChatCompletionResponse($response, $this->logger);
+
+            $this->logResponse('ChatCompletionsResponse', $requestId, $duration, [
+                'content' => $chatCompletionResponse->getContent(),
+                'response_headers' => $response->getHeaders(),
+                'usage' => $chatCompletionResponse->getUsage()?->toArray(),
+            ]);
+
+            EventUtil::dispatch(new AfterChatCompletionsEvent($chatRequest, $chatCompletionResponse, $duration));
+
+            $this->cacheReasoningContentFromResponse($chatCompletionResponse);
+            return $chatCompletionResponse;
+        } catch (Throwable $e) {
+            throw $this->convertException($e, $this->createExceptionContext($url, $options, 'completions'));
+        }
     }
 
     /**
@@ -65,16 +97,51 @@ class Client extends AbstractClient
     public function chatCompletionsStream(ChatCompletionRequest $chatRequest): ChatCompletionStreamResponse
     {
         $this->restoreReasoningContentFromCache($chatRequest);
-        $response = parent::chatCompletionsStream($chatRequest);
 
-        // Add callback to cache reasoning_content after stream completion
-        /** @var AfterChatCompletionsStreamEvent $event */
-        $event = $response->getAfterChatCompletionsStreamEvent();
-        $event?->addCallback(function ($event) {
-            $this->cacheReasoningContentFromResponse($event->completionResponse);
-        });
+        $chatRequest->setStream(true);
+        $chatRequest->validate();
+        $options = $chatRequest->createOptions();
 
-        return $response;
+        // 将通用 thinking 字段转换为 DeepSeek 格式
+        $this->processThinkingConfig($chatRequest, $options);
+
+        $url = $this->buildChatCompletionsUrl();
+        $requestId = $this->addRequestIdToOptions($options);
+
+        $this->logRequest('ChatCompletionsStreamRequest', $url, $options, $requestId);
+
+        $startTime = microtime(true);
+        try {
+            $options[RequestOptions::STREAM] = true;
+            $options[RequestOptions::TIMEOUT] = $this->requestOptions->getStreamFirstChunkTimeout();
+
+            ['response' => $response, 'duration' => $firstResponseDuration, 'transport' => $transport]
+                = $this->sendRawStreamRequest($url, $options, $startTime);
+
+            $iterator = $this->buildSSEIterator($response, $transport);
+
+            $chatCompletionStreamResponse = new ChatCompletionStreamResponse($response, $this->logger, $iterator);
+            $chatCompletionStreamResponse->setAfterChatCompletionsStreamEvent(
+                new AfterChatCompletionsStreamEvent($chatRequest, $firstResponseDuration)
+            );
+
+            $this->logResponse('ChatCompletionsStreamResponse', $requestId, $firstResponseDuration, [
+                'first_response_ms' => $firstResponseDuration,
+                'response_headers' => $response->getHeaders(),
+                'transport' => $transport,
+            ]);
+
+            // Add callback to cache reasoning_content after stream completion
+            /** @var AfterChatCompletionsStreamEvent $event */
+            $event = $chatCompletionStreamResponse->getAfterChatCompletionsStreamEvent();
+            $event?->addCallback(function ($event) {
+                $this->cacheReasoningContentFromResponse($event->completionResponse);
+            });
+
+            return $chatCompletionStreamResponse;
+        } catch (Throwable $e) {
+            throw $this->convertException($e, $this->createExceptionContext($url, $options, 'stream'));
+        }
     }
 
     /**
@@ -113,6 +180,29 @@ class Client extends AbstractClient
         }
 
         return $headers;
+    }
+
+    /**
+     * 将通用 thinking 字段替换为 DeepSeek 原生格式。
+     *
+     * createOptions() 生成的是 Bedrock 格式（json.thinking.type/budget_tokens），
+     * DeepSeek 需要：
+     * - thinking.type = enabled/disabled（无 budget_tokens）
+     * - reasoning_effort = high/max（顶层字段，由 level 映射）
+     */
+    private function processThinkingConfig(ChatCompletionRequest $request, array &$options): void
+    {
+        // 移除 createOptions() 写入的 Bedrock 格式 thinking 字段
+        unset($options['json']['thinking']);
+
+        $thinking = $request->getThinking();
+        if ($thinking === null) {
+            return;
+        }
+
+        foreach ($thinking->toDeepSeekFormat() as $key => $value) {
+            $options['json'][$key] = $value;
+        }
     }
 
     /**

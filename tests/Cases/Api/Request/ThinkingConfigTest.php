@@ -293,6 +293,48 @@ class ThinkingConfigTest extends TestCase
     }
 
     // -----------------------------------------------------------------------
+    // toDeepSeekFormat
+    // -----------------------------------------------------------------------
+
+    public function testToDeepSeekFormatEnabledDefaultLevel(): void
+    {
+        // level 默认 low，映射为 reasoning_effort = high
+        $config = ThinkingConfig::enabled();
+        $format = $config->toDeepSeekFormat();
+
+        $this->assertSame(['type' => 'enabled'], $format['thinking']);
+        $this->assertSame('high', $format['reasoning_effort']);
+    }
+
+    public function testToDeepSeekFormatEnabledHighLevel(): void
+    {
+        // level = high，映射为 reasoning_effort = max
+        $config = ThinkingConfig::enabled(4000, 'high');
+        $format = $config->toDeepSeekFormat();
+
+        $this->assertSame(['type' => 'enabled'], $format['thinking']);
+        $this->assertSame('max', $format['reasoning_effort']);
+    }
+
+    public function testToDeepSeekFormatDisabled(): void
+    {
+        $config = ThinkingConfig::disabled();
+        $format = $config->toDeepSeekFormat();
+
+        $this->assertSame(['type' => 'disabled'], $format['thinking']);
+        $this->assertArrayNotHasKey('reasoning_effort', $format);
+    }
+
+    public function testToDeepSeekFormatDoesNotIncludeBudgetTokens(): void
+    {
+        // DeepSeek 不使用 budget_tokens，确保不包含该字段
+        $config = ThinkingConfig::enabled(8000, 'low');
+        $format = $config->toDeepSeekFormat();
+
+        $this->assertArrayNotHasKey('budget_tokens', $format['thinking']);
+    }
+
+    // -----------------------------------------------------------------------
     // ChatCompletionRequest 中的兼容性（array 自动转换）
     // -----------------------------------------------------------------------
 
