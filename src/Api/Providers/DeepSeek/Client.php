@@ -208,6 +208,10 @@ class Client extends AbstractClient
     /**
      * 发请求前：为缺少 reasoning_content 的 AssistantMessage（含工具调用）从缓存恢复思考内容.
      * 以该 assistant 消息中所有 tool_call_id 的组合作为 key，一次 assistant 消息只查一次缓存.
+     *
+     * 缓存命中时恢复原始 reasoning_content；
+     * 缓存未命中时（如历史来自其他模型或 DeepSeek 未返回 reasoning_content）
+     * 补空字符串兜底，确保 DeepSeek thinking 模式下字段始终存在，避免 400 错误.
      */
     private function restoreReasoningContentFromCache(ChatCompletionRequest $chatRequest): void
     {
@@ -225,9 +229,8 @@ class Client extends AbstractClient
             $toolCallIds = array_map(fn ($tc) => $tc->getId(), $message->getToolCalls());
             $assistantKey = ReasoningContentCache::generateAssistantKey($toolCallIds);
             $cached = ReasoningContentCache::get($assistantKey);
-            if ($cached !== null) {
-                $message->setReasoningContent($cached);
-            }
+            // 缓存命中时恢复原始内容，未命中时补空字符串兜底（DeepSeek 要求该字段必须存在）
+            $message->setReasoningContent($cached ?? '');
         }
     }
 
