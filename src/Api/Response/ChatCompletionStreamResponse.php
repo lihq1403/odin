@@ -828,7 +828,7 @@ class ChatCompletionStreamResponse extends AbstractResponse implements Stringabl
                                 'stream_index' => $streamIndex,
                                 'function' => [
                                     'name' => $toolCall->getName(),
-                                    'arguments' => $streamArgs !== '' ? $streamArgs : json_encode($toolCall->getArguments()),
+                                    'arguments' => $streamArgs,
                                 ],
                             ];
                         }

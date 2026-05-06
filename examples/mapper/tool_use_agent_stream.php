@@ -265,6 +265,7 @@ $agent = new ToolUseAgent(
     temperature: 0.6,
     logger: $logger
 );
+$agent->setMaxTokens(8192);
 
 // 顺序流式调用示例
 echo "===== 顺序流式工具调用示例 =====\n";

@@ -31,6 +31,8 @@ use Hyperf\Odin\Api\Providers\Gemini\Cache\GeminiCacheConfig;
 use Hyperf\Odin\Api\Providers\Gemini\Gemini;
 use Hyperf\Odin\Api\Providers\Gemini\GeminiConfig;
 use Hyperf\Odin\Api\Providers\Gemini\ServiceAccountConfig;
+use Hyperf\Odin\Api\Providers\Kimi\Kimi;
+use Hyperf\Odin\Api\Providers\Kimi\KimiConfig;
 use Hyperf\Odin\Api\Providers\OpenAI\OpenAI;
 use Hyperf\Odin\Api\Providers\OpenAI\OpenAIConfig;
 use Hyperf\Odin\Api\RequestOptions\ApiOptions;
@@ -67,6 +69,7 @@ class ClientFactory
             'anthropic' => self::createAnthropicClient($config, $apiOptions, $logger),
             'qianfan' => self::createOpenAIClient($config, $apiOptions, $logger),
             'doubao' => self::createDoubaoClient($config, $apiOptions, $logger),
+            'kimi' => self::createKimiClient($config, $apiOptions, $logger),
             default => throw new InvalidArgumentException(sprintf('Unsupported provider: %s', $provider)),
         };
     }
@@ -343,5 +346,25 @@ class ClientFactory
         $anthropic = new Anthropic();
 
         return $anthropic->getClient($clientConfig, $apiOptions, $logger);
+    }
+
+    /**
+     * 创建 Kimi 客户端.
+     *
+     * @param array $config 配置参数
+     * @param null|ApiOptions $apiOptions API请求选项
+     * @param null|LoggerInterface $logger 日志记录器
+     */
+    private static function createKimiClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
+    {
+        $clientConfig = KimiConfig::fromArray($config);
+
+        if ($apiOptions === null) {
+            $apiOptions = new ApiOptions();
+        }
+
+        $kimi = new Kimi();
+
+        return $kimi->getClient($clientConfig, $apiOptions, $logger);
     }
 }

@@ -60,6 +60,8 @@ class ToolUseAgent
      */
     private int $maxToolCallRetries = 3;
 
+    private int $maxTokens = 0;
+
     private float $frequencyPenalty = 0.0;
 
     private float $presencePenalty = 0.0;
@@ -79,6 +81,11 @@ class ToolUseAgent
             $this->memory = new MemoryManager();
         }
         $this->tools = $this->formatTools($tools);
+    }
+
+    public function setMaxTokens(int $maxTokens): void
+    {
+        $this->maxTokens = $maxTokens;
     }
 
     public function setFrequencyPenalty(float $frequencyPenalty): void
@@ -288,6 +295,7 @@ class ToolUseAgent
                 $response = $this->model->chat(
                     messages: $messages,
                     temperature: $this->temperature,
+                    maxTokens: $this->maxTokens,
                     tools: array_values($this->tools),
                     frequencyPenalty: $this->frequencyPenalty,
                     presencePenalty: $this->presencePenalty,
@@ -297,6 +305,7 @@ class ToolUseAgent
                 $response = $this->model->chatStream(
                     messages: $messages,
                     temperature: $this->temperature,
+                    maxTokens: $this->maxTokens,
                     tools: array_values($this->tools),
                     frequencyPenalty: $this->frequencyPenalty,
                     presencePenalty: $this->presencePenalty,

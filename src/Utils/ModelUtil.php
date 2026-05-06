@@ -81,7 +81,7 @@ class ModelUtil
         }
 
         if (self::isKimiModel($model)) {
-            return 'deepseek'; // Kimi模型使用DeepSeek客户端以支持reasoning_content
+            return 'kimi';
         }
 
         if (self::isDoubaoModel($model)) {
