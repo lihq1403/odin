@@ -27,6 +27,7 @@ use function Hyperf\Config\config;
  * - 当使用qwen系列模型时，自动切换到DashScope客户端
  * - 当使用deepseek系列模型时，自动切换到DeepSeek客户端
  * - 当使用kimi系列模型时，自动切换到DeepSeek客户端（支持reasoning_content）
+ * - 当使用doubao系列模型（doubao- 或 ep- 前缀）时，自动切换到Doubao客户端
  * - 其他模型继续使用OpenAI客户端
  */
 class OpenAIModel extends AbstractModel
@@ -76,6 +77,16 @@ class OpenAIModel extends AbstractModel
             );
         }
 
+        // 检查是否启用了Doubao智能路由，且为doubao系列模型（含ep-前缀的Endpoint ID）
+        if ($this->isSmartRoutingEnabled('doubao') && ModelUtil::isDoubaoModel($this->model)) {
+            return ClientFactory::createClient(
+                'doubao',
+                $config,
+                $this->getApiRequestOptions(),
+                $this->logger
+            );
+        }
+
         // 使用ClientFactory统一创建OpenAI客户端
         return ClientFactory::createClient(
             'openai',
@@ -97,7 +108,7 @@ class OpenAIModel extends AbstractModel
     /**
      * 检查指定类型的智能路由是否启用.
      *
-     * @param string $type 路由类型：'qwen'、'deepseek' 或 'kimi'
+     * @param string $type 路由类型：'qwen'、'deepseek'、'kimi' 或 'doubao'
      */
     private function isSmartRoutingEnabled(string $type): bool
     {

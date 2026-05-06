@@ -25,13 +25,14 @@ use Hyperf\Odin\Api\Providers\DashScope\DashScope;
 use Hyperf\Odin\Api\Providers\DashScope\DashScopeConfig;
 use Hyperf\Odin\Api\Providers\DeepSeek\DeepSeek;
 use Hyperf\Odin\Api\Providers\DeepSeek\DeepSeekConfig;
+use Hyperf\Odin\Api\Providers\Doubao\Doubao;
+use Hyperf\Odin\Api\Providers\Doubao\DoubaoConfig;
 use Hyperf\Odin\Api\Providers\Gemini\Cache\GeminiCacheConfig;
 use Hyperf\Odin\Api\Providers\Gemini\Gemini;
 use Hyperf\Odin\Api\Providers\Gemini\GeminiConfig;
 use Hyperf\Odin\Api\Providers\Gemini\ServiceAccountConfig;
 use Hyperf\Odin\Api\Providers\OpenAI\OpenAI;
 use Hyperf\Odin\Api\Providers\OpenAI\OpenAIConfig;
-use Hyperf\Odin\Api\Providers\Volcengine\VolcengineArk;
 use Hyperf\Odin\Api\RequestOptions\ApiOptions;
 use Hyperf\Odin\Contract\Api\ClientInterface;
 use InvalidArgumentException;
@@ -45,7 +46,7 @@ class ClientFactory
     /**
      * 根据提供商类型创建客户端.
      *
-     * @param string $provider 提供商类型 (openai, azure_openai, aws_bedrock, dashscope, gemini, deepseek, anthropic, qianfan, volcengine)
+     * @param string $provider 提供商类型 (openai, azure_openai, aws_bedrock, dashscope, gemini, deepseek, anthropic, qianfan, doubao)
      * @param array $config 配置参数
      * @param null|ApiOptions $apiOptions API请求选项
      * @param null|LoggerInterface $logger 日志记录器
@@ -65,7 +66,7 @@ class ClientFactory
             'deepseek' => self::createDeepSeekClient($config, $apiOptions, $logger),
             'anthropic' => self::createAnthropicClient($config, $apiOptions, $logger),
             'qianfan' => self::createOpenAIClient($config, $apiOptions, $logger),
-            'volcengine' => self::createVolcengineArkClient($config, $apiOptions, $logger),
+            'doubao' => self::createDoubaoClient($config, $apiOptions, $logger),
             default => throw new InvalidArgumentException(sprintf('Unsupported provider: %s', $provider)),
         };
     }
@@ -90,19 +91,23 @@ class ClientFactory
     }
 
     /**
-     * 创建火山方舟客户端.
+     * 创建 Doubao 客户端.
      *
      * @param array $config 配置参数
      * @param null|ApiOptions $apiOptions API请求选项
      * @param null|LoggerInterface $logger 日志记录器
      */
-    private static function createVolcengineArkClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
+    private static function createDoubaoClient(array $config, ?ApiOptions $apiOptions = null, ?LoggerInterface $logger = null): ClientInterface
     {
-        $clientConfig = OpenAIConfig::fromArray($config);
+        $clientConfig = new DoubaoConfig(
+            apiKey: $config['api_key'] ?? '',
+            baseUrl: $config['base_url'] ?? 'https://ark.cn-beijing.volces.com/api/v3',
+            skipApiKeyValidation: $config['skip_api_key_validation'] ?? false,
+        );
 
-        $volcengineArk = new VolcengineArk();
+        $doubao = new Doubao();
 
-        return $volcengineArk->getClient($clientConfig, $apiOptions, $logger);
+        return $doubao->getClient($clientConfig, $apiOptions, $logger);
     }
 
     /**

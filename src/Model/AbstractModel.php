@@ -15,6 +15,8 @@ namespace Hyperf\Odin\Model;
 use Hyperf\Odin\Api\Request\ChatCompletionRequest;
 use Hyperf\Odin\Api\Request\CompletionRequest;
 use Hyperf\Odin\Api\Request\EmbeddingRequest;
+use Hyperf\Odin\Api\Request\MultiModalEmbeddingItem;
+use Hyperf\Odin\Api\Request\MultiModalEmbeddingRequest;
 use Hyperf\Odin\Api\Request\ThinkingConfig;
 use Hyperf\Odin\Api\RequestOptions\ApiOptions;
 use Hyperf\Odin\Api\Response\ChatCompletionResponse;
@@ -235,6 +237,36 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
         $embeddingRequest->setIncludeBusinessParams($this->includeBusinessParams);
 
         return $client->embeddings($embeddingRequest);
+    }
+
+    /**
+     * 多模态嵌入：单组输入，返回一个 Embedding 便于直接使用.
+     *
+     * @param array<int, MultiModalEmbeddingItem> $items
+     */
+    public function multimodalEmbedding(array $items): Embedding
+    {
+        $response = $this->multimodalEmbeddings([$items]);
+        $first = $response->getData()[0] ?? null;
+        return new Embedding($first ? $first->getEmbedding() : []);
+    }
+
+    /**
+     * 多模态嵌入批量版本：支持多组输入，每组返回一个独立向量.
+     * 目前仅 DashScope 支持多组批量（非融合模式），其余提供商仅支持单组.
+     *
+     * @param array<int, array<int, MultiModalEmbeddingItem>> $inputs
+     */
+    public function multimodalEmbeddings(array $inputs): EmbeddingResponse
+    {
+        $this->checkEmbeddingSupport();
+
+        $request = new MultiModalEmbeddingRequest(
+            inputs: $inputs,
+            model: $this->model,
+        );
+
+        return $this->getClient()->multimodalEmbeddings($request);
     }
 
     /**

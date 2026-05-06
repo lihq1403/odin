@@ -15,6 +15,7 @@ namespace Hyperf\Odin\Contract\Api;
 use Hyperf\Odin\Api\Request\ChatCompletionRequest;
 use Hyperf\Odin\Api\Request\CompletionRequest;
 use Hyperf\Odin\Api\Request\EmbeddingRequest;
+use Hyperf\Odin\Api\Request\MultiModalEmbeddingRequest;
 use Hyperf\Odin\Api\Response\ChatCompletionResponse;
 use Hyperf\Odin\Api\Response\ChatCompletionStreamResponse;
 use Hyperf\Odin\Api\Response\EmbeddingResponse;
@@ -34,6 +35,12 @@ interface ClientInterface
      * 参照 OpenAI API 实现：https://platform.openai.com/docs/api-reference/embeddings.
      */
     public function embeddings(EmbeddingRequest $embeddingRequest): EmbeddingResponse;
+
+    /**
+     * 创建多模态嵌入向量，支持文本、图片、视频输入.
+     * 若所有输入单元均为文本，自动降级到 embeddings() 实现.
+     */
+    public function multimodalEmbeddings(MultiModalEmbeddingRequest $request): EmbeddingResponse;
 
     /**
      * 使用 completions 接口生成文本补全.

@@ -13,18 +13,19 @@ declare(strict_types=1);
 namespace Hyperf\Odin\Event;
 
 use Hyperf\Odin\Api\Request\EmbeddingRequest;
+use Hyperf\Odin\Api\Request\MultiModalEmbeddingRequest;
 use Hyperf\Odin\Api\Response\EmbeddingResponse;
 
 class AfterEmbeddingsEvent
 {
-    private EmbeddingRequest $embeddingRequest;
+    private EmbeddingRequest|MultiModalEmbeddingRequest $embeddingRequest;
 
     private EmbeddingResponse $embeddingResponse;
 
     private float $duration;
 
     public function __construct(
-        EmbeddingRequest $embeddingRequest,
+        EmbeddingRequest|MultiModalEmbeddingRequest $embeddingRequest,
         EmbeddingResponse $embeddingResponse,
         float $duration,
     ) {
@@ -33,7 +34,7 @@ class AfterEmbeddingsEvent
         $this->duration = $duration;
     }
 
-    public function getEmbeddingRequest(): EmbeddingRequest
+    public function getEmbeddingRequest(): EmbeddingRequest|MultiModalEmbeddingRequest
     {
         return $this->embeddingRequest;
     }

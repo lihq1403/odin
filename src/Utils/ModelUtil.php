@@ -42,6 +42,16 @@ class ModelUtil
     }
 
     /**
+     * 检查是否为 Doubao 系列模型.
+     * 匹配 doubao- 前缀，以及 ep- 前缀的火山方舟 Endpoint ID 格式.
+     */
+    public static function isDoubaoModel(string $model): bool
+    {
+        $lower = strtolower($model);
+        return str_starts_with($lower, 'doubao-') || str_starts_with($lower, 'ep-');
+    }
+
+    /**
      * 检查是否为 Claude 系列模型.
      * 除标准 "claude" 前缀外，也匹配 sonnet / opus / haiku 等 Claude 专属系列名，
      * 以兼容 MaaS_Cl_Sonnet_4.6_20260217 这类自定义命名格式.
@@ -72,6 +82,10 @@ class ModelUtil
 
         if (self::isKimiModel($model)) {
             return 'deepseek'; // Kimi模型使用DeepSeek客户端以支持reasoning_content
+        }
+
+        if (self::isDoubaoModel($model)) {
+            return 'doubao';
         }
 
         return 'openai'; // 默认为 OpenAI

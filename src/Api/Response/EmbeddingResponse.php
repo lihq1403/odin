@@ -92,6 +92,31 @@ class EmbeddingResponse extends AbstractResponse
         return $this;
     }
 
+    /**
+     * 用于日志输出的精简格式，embedding 向量替换为数量，避免日志过长.
+     */
+    public function toLogArray(): array
+    {
+        $data = [
+            'object' => $this->object,
+            'model' => $this->model,
+            'count' => count($this->data),
+            'embeddings' => array_map(
+                static fn (Embedding $item) => ['index' => $item->getIndex(), 'dimensions' => count($item->getEmbedding())],
+                $this->data
+            ),
+        ];
+        if ($this->usage) {
+            $data['usage']['prompt_tokens'] = $this->usage->getPromptTokens();
+            $data['usage']['total_tokens'] = $this->usage->getTotalTokens();
+            $details = $this->usage->getPromptTokensDetails();
+            if (! empty($details)) {
+                $data['usage']['prompt_tokens_details'] = $details;
+            }
+        }
+        return $data;
+    }
+
     public function toArray(): array
     {
         $data = [
@@ -106,6 +131,10 @@ class EmbeddingResponse extends AbstractResponse
         if ($this->usage) {
             $data['usage']['prompt_tokens'] = $this->usage->getPromptTokens();
             $data['usage']['total_tokens'] = $this->usage->getTotalTokens();
+            $details = $this->usage->getPromptTokensDetails();
+            if (! empty($details)) {
+                $data['usage']['prompt_tokens_details'] = $details;
+            }
         }
 
         return $data;

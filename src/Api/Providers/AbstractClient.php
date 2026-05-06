@@ -18,6 +18,7 @@ use Hyperf\Engine\Coroutine;
 use Hyperf\Odin\Api\Request\ChatCompletionRequest;
 use Hyperf\Odin\Api\Request\CompletionRequest;
 use Hyperf\Odin\Api\Request\EmbeddingRequest;
+use Hyperf\Odin\Api\Request\MultiModalEmbeddingRequest;
 use Hyperf\Odin\Api\RequestOptions\ApiOptions;
 use Hyperf\Odin\Api\Response\ChatCompletionResponse;
 use Hyperf\Odin\Api\Response\ChatCompletionStreamResponse;
@@ -36,6 +37,7 @@ use Hyperf\Odin\Exception\LLMException;
 use Hyperf\Odin\Exception\LLMException\ErrorHandlerInterface;
 use Hyperf\Odin\Exception\LLMException\ErrorMappingManager;
 use Hyperf\Odin\Exception\LLMException\LLMErrorHandler;
+use Hyperf\Odin\Exception\LLMException\Model\LLMEmbeddingNotSupportedException;
 use Hyperf\Odin\Utils\EventUtil;
 use Hyperf\Odin\Utils\LoggingConfigHelper;
 use Hyperf\Odin\Utils\LogUtil;
@@ -159,7 +161,7 @@ abstract class AbstractClient implements ClientInterface
             $embeddingResponse = new EmbeddingResponse($response, $this->logger);
 
             $this->logResponse('EmbeddingsResponse', $requestId, $duration, [
-                'data' => $embeddingResponse->toArray(),
+                'data' => $embeddingResponse->toLogArray(),
                 'response_headers' => $response->getHeaders(),
             ]);
 
@@ -169,6 +171,13 @@ abstract class AbstractClient implements ClientInterface
         } catch (Throwable $e) {
             throw $this->convertException($e, $this->createExceptionContext($url, $options, 'embeddings'));
         }
+    }
+
+    public function multimodalEmbeddings(MultiModalEmbeddingRequest $request): EmbeddingResponse
+    {
+        throw new LLMEmbeddingNotSupportedException(
+            'This client does not support multimodal embeddings. Use DashScope or Doubao client instead.'
+        );
     }
 
     public function completions(CompletionRequest $completionRequest): TextCompletionResponse

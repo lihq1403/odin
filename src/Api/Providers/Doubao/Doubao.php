@@ -10,26 +10,28 @@ declare(strict_types=1);
  * @license  https://github.com/hyperf/hyperf/blob/master/LICENSE
  */
 
-namespace Hyperf\Odin\Api\Providers\Volcengine;
+namespace Hyperf\Odin\Api\Providers\Doubao;
 
 use Hyperf\Odin\Api\Providers\AbstractApi;
-use Hyperf\Odin\Api\Providers\OpenAI\OpenAIConfig;
 use Hyperf\Odin\Api\RequestOptions\ApiOptions;
 use Hyperf\Odin\Exception\LLMException\Configuration\LLMInvalidApiKeyException;
 use Hyperf\Odin\Exception\LLMException\Configuration\LLMInvalidEndpointException;
 use Psr\Log\LoggerInterface;
 
-class VolcengineArk extends AbstractApi
+/**
+ * Doubao API 工厂类.
+ */
+class Doubao extends AbstractApi
 {
     /**
-     * @var VolcengineArkClient[]
+     * @var Client[]
      */
     protected array $clients = [];
 
-    public function getClient(OpenAIConfig $config, ?ApiOptions $requestOptions = null, ?LoggerInterface $logger = null): VolcengineArkClient
+    public function getClient(DoubaoConfig $config, ?ApiOptions $requestOptions = null, ?LoggerInterface $logger = null): Client
     {
         if (empty($config->getApiKey()) && ! $config->shouldSkipApiKeyValidation()) {
-            throw new LLMInvalidApiKeyException('API密钥不能为空', null, 'VolcengineArk');
+            throw new LLMInvalidApiKeyException('API密钥不能为空', null, 'Doubao');
         }
 
         if (empty($config->getBaseUrl())) {
@@ -39,11 +41,11 @@ class VolcengineArk extends AbstractApi
         $requestOptions = $requestOptions ?? new ApiOptions();
 
         $key = md5(json_encode($config->toArray()) . json_encode($requestOptions->toArray()));
-        if (($this->clients[$key] ?? null) instanceof VolcengineArkClient) {
+        if (($this->clients[$key] ?? null) instanceof Client) {
             return $this->clients[$key];
         }
 
-        $client = new VolcengineArkClient($config, $requestOptions, $logger);
+        $client = new Client($config, $requestOptions, $logger);
         $this->clients[$key] = $client;
         return $client;
     }

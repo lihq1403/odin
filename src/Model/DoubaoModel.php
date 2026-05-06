@@ -12,8 +12,8 @@ declare(strict_types=1);
 
 namespace Hyperf\Odin\Model;
 
-use Hyperf\Odin\Api\Providers\OpenAI\OpenAI;
-use Hyperf\Odin\Api\Providers\OpenAI\OpenAIConfig;
+use Hyperf\Odin\Api\Providers\Doubao\Doubao;
+use Hyperf\Odin\Api\Providers\Doubao\DoubaoConfig;
 use Hyperf\Odin\Contract\Api\ClientInterface;
 
 /**
@@ -32,13 +32,12 @@ class DoubaoModel extends AbstractModel
         $config = $this->config;
         $this->processApiBaseUrl($config);
 
-        $openAI = new OpenAI();
-        $config = new OpenAIConfig(
+        $doubao = new Doubao();
+        $doubaoConfig = new DoubaoConfig(
             apiKey: $config['api_key'] ?? '',
-            organization: '', // Doubao不需要组织ID
-            baseUrl: $config['base_url'] ?? ''
+            baseUrl: $config['base_url'] ?? 'https://ark.cn-beijing.volces.com/api/v3',
         );
-        return $openAI->getClient($config, $this->getApiRequestOptions(), $this->logger);
+        return $doubao->getClient($doubaoConfig, $this->getApiRequestOptions(), $this->logger);
     }
 
     /**
