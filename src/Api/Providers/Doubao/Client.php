@@ -62,6 +62,8 @@ class Client extends AbstractClient
             model: $embeddingRequest->getModel(),
             encodingFormat: $embeddingRequest->getEncodingFormat(),
         );
+        $request->setBusinessParams($embeddingRequest->getBusinessParams());
+        $request->setIncludeBusinessParams($embeddingRequest->isIncludeBusinessParams());
 
         return $this->multimodalEmbeddings($request);
     }
@@ -93,6 +95,10 @@ class Client extends AbstractClient
 
         if ($request->getInstruct() !== null) {
             $payload['instructions'] = $request->getInstruct();
+        }
+
+        if ($request->isIncludeBusinessParams() && ! empty($request->getBusinessParams())) {
+            $payload['business_params'] = $request->getBusinessParams();
         }
 
         $options = [RequestOptions::JSON => $payload];

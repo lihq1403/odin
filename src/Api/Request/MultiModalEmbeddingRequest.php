@@ -26,6 +26,10 @@ use Hyperf\Odin\Exception\InvalidArgumentException;
  */
 class MultiModalEmbeddingRequest implements RequestInterface
 {
+    private array $businessParams = [];
+
+    private bool $includeBusinessParams = false;
+
     /**
      * @param array<int, array<int, MultiModalEmbeddingItem>> $inputs 输入组列表，每组为一次嵌入任务
      * @param string $model 模型 ID
@@ -66,13 +70,19 @@ class MultiModalEmbeddingRequest implements RequestInterface
     }
 
     /**
-     * 各 Client 自行序列化，此处返回空数组作为占位.
+     * 各 Client 自行序列化输入部分，此处仅注入公共参数.
      *
      * @return array<string, mixed>
      */
     public function createOptions(): array
     {
-        return [];
+        $options = [];
+
+        if ($this->includeBusinessParams && ! empty($this->businessParams)) {
+            $options['business_params'] = $this->businessParams;
+        }
+
+        return $options;
     }
 
     /**
@@ -130,5 +140,25 @@ class MultiModalEmbeddingRequest implements RequestInterface
     public function isEnableFusion(): bool
     {
         return $this->enableFusion;
+    }
+
+    public function getBusinessParams(): array
+    {
+        return $this->businessParams;
+    }
+
+    public function setBusinessParams(array $businessParams): void
+    {
+        $this->businessParams = $businessParams;
+    }
+
+    public function isIncludeBusinessParams(): bool
+    {
+        return $this->includeBusinessParams;
+    }
+
+    public function setIncludeBusinessParams(bool $includeBusinessParams): void
+    {
+        $this->includeBusinessParams = $includeBusinessParams;
     }
 }

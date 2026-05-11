@@ -28,7 +28,7 @@ interface EmbeddingInterface
      *
      * @param array<int, MultiModalEmbeddingItem> $items
      */
-    public function multimodalEmbedding(array $items): Embedding;
+    public function multimodalEmbedding(array $items, array $businessParams = []): Embedding;
 
     /**
      * 多模态嵌入批量版本：支持多组输入，返回完整响应（含 usage）.
@@ -36,7 +36,7 @@ interface EmbeddingInterface
      *
      * @param array<int, array<int, MultiModalEmbeddingItem>> $inputs
      */
-    public function multimodalEmbeddings(array $inputs): EmbeddingResponse;
+    public function multimodalEmbeddings(array $inputs, array $businessParams = []): EmbeddingResponse;
 
     public function getModelName(): string;
 

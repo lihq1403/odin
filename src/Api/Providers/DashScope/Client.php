@@ -172,6 +172,8 @@ class Client extends AbstractClient
             encodingFormat: $embeddingRequest->getEncodingFormat(),
             enableFusion: false,
         );
+        $request->setBusinessParams($embeddingRequest->getBusinessParams());
+        $request->setIncludeBusinessParams($embeddingRequest->isIncludeBusinessParams());
 
         return $this->multimodalEmbeddings($request);
     }
@@ -216,6 +218,10 @@ class Client extends AbstractClient
 
         if ($enableFusion) {
             $payload['parameters']['enable_fusion'] = true;
+        }
+
+        if ($request->isIncludeBusinessParams() && ! empty($request->getBusinessParams())) {
+            $payload['business_params'] = $request->getBusinessParams();
         }
 
         $options = [RequestOptions::JSON => $payload];

@@ -244,9 +244,9 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
      *
      * @param array<int, MultiModalEmbeddingItem> $items
      */
-    public function multimodalEmbedding(array $items): Embedding
+    public function multimodalEmbedding(array $items, array $businessParams = []): Embedding
     {
-        $response = $this->multimodalEmbeddings([$items]);
+        $response = $this->multimodalEmbeddings([$items], $businessParams);
         $first = $response->getData()[0] ?? null;
         return new Embedding($first ? $first->getEmbedding() : []);
     }
@@ -257,7 +257,7 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
      *
      * @param array<int, array<int, MultiModalEmbeddingItem>> $inputs
      */
-    public function multimodalEmbeddings(array $inputs): EmbeddingResponse
+    public function multimodalEmbeddings(array $inputs, array $businessParams = []): EmbeddingResponse
     {
         $this->checkEmbeddingSupport();
 
@@ -265,6 +265,8 @@ abstract class AbstractModel implements ModelInterface, EmbeddingInterface
             inputs: $inputs,
             model: $this->model,
         );
+        $request->setBusinessParams($businessParams);
+        $request->setIncludeBusinessParams($this->includeBusinessParams);
 
         return $this->getClient()->multimodalEmbeddings($request);
     }
