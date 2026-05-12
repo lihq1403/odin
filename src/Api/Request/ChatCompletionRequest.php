@@ -139,7 +139,7 @@ class ChatCompletionRequest implements RequestInterface
                 'include_usage' => true,
             ];
         }
-        if ($this->thinking !== null && $this->thinking->isEnabled()) {
+        if ($this->thinking !== null) {
             $json['thinking'] = $this->thinking->toBedrockFormat();
         }
 
