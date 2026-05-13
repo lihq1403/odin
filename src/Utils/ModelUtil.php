@@ -42,6 +42,15 @@ class ModelUtil
     }
 
     /**
+     * 检查是否为 MiMo 系列模型（小米）.
+     * 匹配 mimo 前缀，如 MiMo-V2.5-Pro、MiMo-V2-Flash 等.
+     */
+    public static function isMiMoModel(string $model): bool
+    {
+        return str_contains(strtolower($model), 'mimo');
+    }
+
+    /**
      * 检查是否为 Doubao 系列模型.
      * 匹配 doubao- 前缀，以及 ep- 前缀的火山方舟 Endpoint ID 格式.
      */

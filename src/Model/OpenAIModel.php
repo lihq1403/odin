@@ -28,6 +28,7 @@ use function Hyperf\Config\config;
  * - 当使用deepseek系列模型时，自动切换到DeepSeek客户端
  * - 当使用kimi系列模型时，自动切换到Kimi客户端（处理tool_call_id格式转换及reasoning_content）
  * - 当使用doubao系列模型（doubao- 或 ep- 前缀）时，自动切换到Doubao客户端
+ * - 当使用mimo系列模型（小米 MiMo）时，自动切换到DeepSeek客户端（处理reasoning_content多轮回传）
  * - 其他模型继续使用OpenAI客户端
  */
 class OpenAIModel extends AbstractModel
@@ -76,6 +77,17 @@ class OpenAIModel extends AbstractModel
             );
         }
 
+        // 检查是否启用了MiMo智能路由，且为mimo系列模型（小米）
+        // MiMo 要求多轮工具调用时必须回传 reasoning_content，复用 DeepSeek 客户端的缓存机制
+        if ($this->isSmartRoutingEnabled('mimo') && ModelUtil::isMiMoModel($this->model)) {
+            return ClientFactory::createClient(
+                'deepseek',
+                $config,
+                $this->getApiRequestOptions(),
+                $this->logger
+            );
+        }
+
         // 检查是否启用了Doubao智能路由，且为doubao系列模型（含ep-前缀的Endpoint ID）
         if ($this->isSmartRoutingEnabled('doubao') && ModelUtil::isDoubaoModel($this->model)) {
             return ClientFactory::createClient(
@@ -107,7 +119,7 @@ class OpenAIModel extends AbstractModel
     /**
      * 检查指定类型的智能路由是否启用.
      *
-     * @param string $type 路由类型：'qwen'、'deepseek'、'kimi' 或 'doubao'
+     * @param string $type 路由类型：'qwen'、'deepseek'、'kimi'、'doubao' 或 'mimo'
      */
     private function isSmartRoutingEnabled(string $type): bool
     {
