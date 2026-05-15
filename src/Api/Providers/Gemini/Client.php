@@ -61,6 +61,9 @@ class Client extends AbstractClient
                 RequestOptions::HEADERS => $this->getHeaders(),
             ];
 
+            // 注入 extra_body / extra_header
+            $chatRequest->applyExtraToOptions($options);
+
             $requestId = $this->addRequestIdToOptions($options);
 
             $this->logRequest('GeminiChatRequest', $url, $options, $requestId);
@@ -124,6 +127,9 @@ class Client extends AbstractClient
                 RequestOptions::STREAM => true,
                 RequestOptions::TIMEOUT => $this->requestOptions->getStreamFirstChunkTimeout(),
             ];
+
+            // 注入 extra_body / extra_header
+            $chatRequest->applyExtraToOptions($options);
 
             $requestId = $this->addRequestIdToOptions($options);
 

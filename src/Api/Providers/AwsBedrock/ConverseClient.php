@@ -250,6 +250,14 @@ class ConverseClient extends Client
             }
         }
 
+        // 合并 extra.extra_body 到请求体（同名字段会覆盖）
+        // 注意：Converse API 通过 AWS SDK 签名，extra_header 在该路径下不会被注入，
+        // 如需自定义请求头请改用 ConverseCustomClient。
+        $extraBody = $chatRequest->getExtraBody();
+        if (! empty($extraBody)) {
+            $requestBody = array_merge($requestBody, $extraBody);
+        }
+
         return $requestBody;
     }
 

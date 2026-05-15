@@ -60,6 +60,14 @@ class ChatCompletionRequest implements RequestInterface
 
     private array $optionKeyMaps = [];
 
+    /**
+     * 额外的请求参数，会在请求大模型时自动附加到请求体或请求头.
+     * 支持的键：
+     *  - extra_header: array<string, string|string[]> 额外的 HTTP 请求头
+     *  - extra_body:   array<string, mixed>          额外的 JSON 请求体字段（与现有字段合并，会覆盖已有的同名键）.
+     */
+    private array $extra = [];
+
     public function __construct(
         /** @var MessageInterface[] $messages */
         protected array $messages,
@@ -148,10 +156,45 @@ class ChatCompletionRequest implements RequestInterface
             $json['reasoning_split'] = true;
         }
 
-        return [
+        $options = [
             RequestOptions::JSON => $json,
             RequestOptions::STREAM => $this->stream,
         ];
+
+        // 统一注入 extra_body / extra_header
+        $this->applyExtraToOptions($options);
+
+        return $options;
+    }
+
+    /**
+     * 将 extra.extra_body / extra.extra_header 合并到 Guzzle 风格的 options 中。
+     * 适用于不走 createOptions() 自行组装请求选项的 Provider（Anthropic、Gemini 等）。
+     *
+     * - extra_body  会与 RequestOptions::JSON 数组合并（同名键会覆盖）
+     * - extra_header 会与 RequestOptions::HEADERS 数组合并（同名键会覆盖）
+     *
+     * @param array $options Guzzle 请求选项数组（引用传递）
+     */
+    public function applyExtraToOptions(array &$options): void
+    {
+        $extraBody = $this->extra['extra_body'] ?? [];
+        if (! empty($extraBody) && is_array($extraBody)) {
+            $currentJson = $options[RequestOptions::JSON] ?? [];
+            if (! is_array($currentJson)) {
+                $currentJson = [];
+            }
+            $options[RequestOptions::JSON] = array_merge($currentJson, $extraBody);
+        }
+
+        $extraHeader = $this->extra['extra_header'] ?? [];
+        if (! empty($extraHeader) && is_array($extraHeader)) {
+            $currentHeaders = $options[RequestOptions::HEADERS] ?? [];
+            if (! is_array($currentHeaders)) {
+                $currentHeaders = [];
+            }
+            $options[RequestOptions::HEADERS] = array_merge($currentHeaders, $extraHeader);
+        }
     }
 
     /**
@@ -417,6 +460,61 @@ class ChatCompletionRequest implements RequestInterface
         $this->tools = $tools;
     }
 
+    /**
+     * 设置额外的请求参数.
+     * 支持的键：extra_header（HTTP 请求头）、extra_body（JSON 请求体追加字段）.
+     *
+     * @param array{extra_header?: array<string, mixed>, extra_body?: array<string, mixed>} $extra
+     */
+    public function setExtra(array $extra): void
+    {
+        $this->extra = $extra;
+    }
+
+    /**
+     * 获取额外的请求参数.
+     */
+    public function getExtra(): array
+    {
+        return $this->extra;
+    }
+
+    /**
+     * 设置额外的 HTTP 请求头.
+     *
+     * @param array<string, mixed> $extraHeader
+     */
+    public function setExtraHeader(array $extraHeader): void
+    {
+        $this->extra['extra_header'] = $extraHeader;
+    }
+
+    /**
+     * 获取额外的 HTTP 请求头.
+     */
+    public function getExtraHeader(): array
+    {
+        return $this->extra['extra_header'] ?? [];
+    }
+
+    /**
+     * 设置额外的 JSON 请求体字段.
+     *
+     * @param array<string, mixed> $extraBody
+     */
+    public function setExtraBody(array $extraBody): void
+    {
+        $this->extra['extra_body'] = $extraBody;
+    }
+
+    /**
+     * 获取额外的 JSON 请求体字段.
+     */
+    public function getExtraBody(): array
+    {
+        return $this->extra['extra_body'] ?? [];
+    }
+
     public function toArray(): array
     {
         return [
@@ -437,6 +535,7 @@ class ChatCompletionRequest implements RequestInterface
             'tools_token_estimate' => $this->toolsTokenEstimate,
             'total_token_estimate' => $this->totalTokenEstimate,
             'stream_include_usage' => $this->streamIncludeUsage,
+            'extra' => $this->extra,
         ];
     }
 

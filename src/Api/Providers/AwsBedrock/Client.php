@@ -412,6 +412,14 @@ class Client extends AbstractClient
             }
         }
 
+        // 合并 extra.extra_body 到请求体（同名字段会覆盖）
+        // 注意：AWS Bedrock 通过 SDK 自动签名，extra_header 在该路径下不会被注入，
+        // 如需自定义请求头请改用 ConverseCustomClient。
+        $extraBody = $chatRequest->getExtraBody();
+        if (! empty($extraBody)) {
+            $requestBody = array_merge($requestBody, $extraBody);
+        }
+
         return $requestBody;
     }
 }

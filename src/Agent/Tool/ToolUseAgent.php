@@ -14,6 +14,7 @@ namespace Hyperf\Odin\Agent\Tool;
 
 use Closure;
 use Generator;
+use Hyperf\Odin\Api\Request\ChatCompletionRequest;
 use Hyperf\Odin\Api\Response\ChatCompletionChoice;
 use Hyperf\Odin\Api\Response\ChatCompletionResponse;
 use Hyperf\Odin\Api\Response\ChatCompletionStreamResponse;
@@ -68,6 +69,14 @@ class ToolUseAgent
 
     private array $businessParams = [];
 
+    /**
+     * 透传给大模型请求的额外参数.
+     * 支持的键：
+     *  - extra_header: array<string, string|string[]>
+     *  - extra_body:   array<string, mixed>.
+     */
+    private array $extra = [];
+
     private array $mcpTools = [];
 
     public function __construct(
@@ -101,6 +110,37 @@ class ToolUseAgent
     public function setBusinessParams(array $businessParams): void
     {
         $this->businessParams = $businessParams;
+    }
+
+    /**
+     * 设置透传给大模型的额外参数.
+     *
+     * @param array $extra 形如 ['extra_header' => [...], 'extra_body' => [...]]
+     */
+    public function setExtra(array $extra): void
+    {
+        $this->extra = $extra;
+    }
+
+    /**
+     * 设置透传给大模型的额外请求头.
+     */
+    public function setExtraHeader(array $extraHeader): void
+    {
+        $this->extra['extra_header'] = $extraHeader;
+    }
+
+    /**
+     * 设置透传给大模型的额外请求体字段.
+     */
+    public function setExtraBody(array $extraBody): void
+    {
+        $this->extra['extra_body'] = $extraBody;
+    }
+
+    public function getExtra(): array
+    {
+        return $this->extra;
     }
 
     /**
@@ -292,25 +332,9 @@ class ToolUseAgent
             $messages = array_merge($this->memory->getSystemMessages(), $this->memory->getMessages());
 
             if (! $stream) {
-                $response = $this->model->chat(
-                    messages: $messages,
-                    temperature: $this->temperature,
-                    maxTokens: $this->maxTokens,
-                    tools: array_values($this->tools),
-                    frequencyPenalty: $this->frequencyPenalty,
-                    presencePenalty: $this->presencePenalty,
-                    businessParams: $this->businessParams,
-                );
+                $response = $this->model->chatWithRequest($this->buildChatRequest($messages, false));
             } else {
-                $response = $this->model->chatStream(
-                    messages: $messages,
-                    temperature: $this->temperature,
-                    maxTokens: $this->maxTokens,
-                    tools: array_values($this->tools),
-                    frequencyPenalty: $this->frequencyPenalty,
-                    presencePenalty: $this->presencePenalty,
-                    businessParams: $this->businessParams,
-                );
+                $response = $this->model->chatStreamWithRequest($this->buildChatRequest($messages, true));
             }
             /** @var null|AssistantMessage $assistantMessage */
             $assistantMessage = yield $response;
@@ -398,6 +422,34 @@ class ToolUseAgent
         }
 
         return $errorMessage;
+    }
+
+    /**
+     * 根据当前 Agent 配置构造 ChatCompletionRequest，用于走 chatWithRequest / chatStreamWithRequest 通道，
+     * 以便透传 extra（extra_header / extra_body）等不在 ModelInterface::chat 签名上的扩展参数.
+     *
+     * @param array $messages 会话消息列表
+     * @param bool $stream 是否为流式请求
+     */
+    private function buildChatRequest(array $messages, bool $stream): ChatCompletionRequest
+    {
+        $request = new ChatCompletionRequest(
+            $messages,
+            '',
+            $this->temperature,
+            $this->maxTokens,
+            [],
+            array_values($this->tools),
+            $stream,
+        );
+        $request->setFrequencyPenalty($this->frequencyPenalty);
+        $request->setPresencePenalty($this->presencePenalty);
+        $request->setBusinessParams($this->businessParams);
+        if (! empty($this->businessParams)) {
+            $request->setIncludeBusinessParams(true);
+        }
+        $request->setExtra($this->extra);
+        return $request;
     }
 
     /**

@@ -110,10 +110,10 @@ class ConverseCustomClient extends AbstractClient
             $request = new Request(
                 'POST',
                 $url,
-                [
+                $this->mergeExtraHeaders($chatRequest, [
                     'Content-Type' => 'application/json',
                     'Accept' => 'application/json',
-                ],
+                ]),
                 json_encode($requestBodyForJson, JSON_UNESCAPED_UNICODE)
             );
 
@@ -196,10 +196,10 @@ class ConverseCustomClient extends AbstractClient
             $request = new Request(
                 'POST',
                 $url,
-                [
+                $this->mergeExtraHeaders($chatRequest, [
                     'Content-Type' => 'application/json',
                     'Accept' => 'application/vnd.amazon.eventstream',
-                ],
+                ]),
                 $bodyJson
             );
 
@@ -477,6 +477,22 @@ class ConverseCustomClient extends AbstractClient
     }
 
     /**
+     * 将 extra.extra_header 合并到 PSR-7 请求头中（同名键会覆盖）。
+     * 必须在签名前调用，否则 AWS 签名会不包含这些头部导致验签失败。
+     *
+     * @param array<string, mixed> $defaultHeaders
+     * @return array<string, mixed>
+     */
+    private function mergeExtraHeaders(ChatCompletionRequest $chatRequest, array $defaultHeaders): array
+    {
+        $extraHeader = $chatRequest->getExtraHeader();
+        if (! empty($extraHeader)) {
+            return array_merge($defaultHeaders, $extraHeader);
+        }
+        return $defaultHeaders;
+    }
+
+    /**
      * Prepare bytes fields for JSON encoding by converting binary data to base64.
      * This is necessary because AWS Bedrock API expects base64-encoded strings for bytes fields,
      * while the converter returns binary data (for AWS SDK compatibility).
@@ -581,6 +597,12 @@ class ConverseCustomClient extends AbstractClient
                     'tools' => $tools,
                 ];
             }
+        }
+
+        // 合并 extra.extra_body 到请求体（同名字段会覆盖）
+        $extraBody = $chatRequest->getExtraBody();
+        if (! empty($extraBody)) {
+            $requestBody = array_merge($requestBody, $extraBody);
         }
 
         return $requestBody;

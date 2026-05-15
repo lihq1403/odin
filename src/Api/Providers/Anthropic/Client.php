@@ -68,6 +68,9 @@ class Client extends AbstractClient
                 RequestOptions::HEADERS => $this->getHeaders(),
             ];
 
+            // 注入 extra_body / extra_header
+            $chatRequest->applyExtraToOptions($options);
+
             $requestId = $this->addRequestIdToOptions($options);
             $this->logRequest('AnthropicChatRequest', $url, $options, $requestId);
 
@@ -118,6 +121,9 @@ class Client extends AbstractClient
                 RequestOptions::TIMEOUT => $this->requestOptions->getStreamFirstChunkTimeout(),
                 RequestOptions::HEADERS => $this->getHeaders(),
             ];
+
+            // 注入 extra_body / extra_header
+            $chatRequest->applyExtraToOptions($options);
 
             $requestId = $this->addRequestIdToOptions($options);
             $this->logRequest('AnthropicChatStreamRequest', $url, $options, $requestId);
